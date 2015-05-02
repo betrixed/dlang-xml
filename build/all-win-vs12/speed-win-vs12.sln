@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "speed_win_vs12", "speed-win-vs12.visualdproj", "{A8293DB8-2CFC-414F-A740-F67225D692FB}"
+EndProject
+Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "collapse", "..\collapse\collapse.visualdproj", "{E1238A6B-EA3D-4C1C-9EDA-976E9869A324}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A8293DB8-2CFC-414F-A740-F67225D692FB}.Debug|Win32.ActiveCfg = Release|Win32
+		{A8293DB8-2CFC-414F-A740-F67225D692FB}.Debug|Win32.Build.0 = Release|Win32
+		{A8293DB8-2CFC-414F-A740-F67225D692FB}.Release|Win32.ActiveCfg = Release|Win32
+		{A8293DB8-2CFC-414F-A740-F67225D692FB}.Release|Win32.Build.0 = Release|Win32
+		{E1238A6B-EA3D-4C1C-9EDA-976E9869A324}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E1238A6B-EA3D-4C1C-9EDA-976E9869A324}.Debug|Win32.Build.0 = Debug|Win32
+		{E1238A6B-EA3D-4C1C-9EDA-976E9869A324}.Release|Win32.ActiveCfg = Release|Win32
+		{E1238A6B-EA3D-4C1C-9EDA-976E9869A324}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

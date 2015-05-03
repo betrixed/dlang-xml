@@ -97,6 +97,10 @@ import std.array;
 
 template xmlt(T) {
 	alias immutable(T)[] XmlString;
+
+	static const XmlString xmlNamespaceURI = "http://www.w3.org/XML/1998/namespace";
+	static const XmlString xmlnsURI = "http://www.w3.org/2000/xmlns/";
+
 	//alias T[] XmlBuffer; // this has performance slow down due to GC heap interactions 
 	//alias Appender!(T[]) XmlBuffer; // still a bit slow - for what reasons I don't care to figure out 
 	alias Buffer!T XmlBuffer; // about 30% faster than Appender. Does not scrub on shrink
@@ -123,7 +127,7 @@ template xmlt(T) {
 
 		Exception makeException(XmlErrorCode code);
 		Exception makeException(string s, XmlErrorLevel level = XmlErrorLevel.FATAL);
-		Exception caughtException(Exception x);
+		Exception caughtException(Exception x, XmlErrorLevel level = XmlErrorLevel.FATAL);
 	}
 
 	class XmlErrorImpl : IXmlErrorHandler
@@ -159,7 +163,7 @@ template xmlt(T) {
 			return new XmlError(s,level);
 		}
 
-		Exception caughtException(Exception x)
+		Exception caughtException(Exception x, XmlErrorLevel level = XmlErrorLevel.FATAL)
 		{
 			auto s = x.toString();
 			pushError(s, XmlErrorLevel.FATAL);

@@ -491,18 +491,15 @@ template XMLTESTS(T)
 			doc = new Document(null,to!XmlString(sourceXml));
 			DOMConfiguration config = doc.getDomConfig();
 			// The cast is essential, polymorphism fails for Variant.get!
+			auto vbal = (t.namespace.length > 0);
+			
+			config.setParameter(xmlNamespaces,Variant(vbal) );
+			config.setParameter("namespace-declarations",Variant(vbal));
+
 			config.setParameter("error-handler",Variant( cast(DOMErrorHandler) result) );
 			config.setParameter("edition", Variant( maxEdition() ) );
 			config.setParameter("canonical-form",Variant(true)); // flag for output hint?
 
-			Variant b;
-			if (t.namespace.length > 0)
-			{
-				b = true;
-			}
-			else
-				b = false;
-			config.setParameter("namespaces", b);
 			parseXmlFile(doc, sourceXml, validate);
 		}
 		catch(XmlError x)

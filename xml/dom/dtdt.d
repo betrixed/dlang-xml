@@ -3,6 +3,8 @@ module xml.dom.dtdt;
 import xml.xmlError;
 import xml.txml;
 import std.stdint, std.conv, std.array;
+import std.ascii;
+import std.string;
 
 enum ChildSelect
 {
@@ -598,4 +600,111 @@ template XMLDTD(T)
 		return val.idup;
 	}
 
+	pure bool isURIScheme(XmlString scheme)
+	{
+		if (scheme.length == 0)
+			return false;
+		bool firstChar = true;
+		foreach(dchar nc ; scheme)
+		{
+			if (firstChar)
+			{
+				firstChar = false;
+				if (!isAlpha(nc))
+					return false;
+			}
+			else
+			{
+				if (!isAlphaNum(nc))
+				{
+					switch(nc)
+					{
+						case '+':
+						case '-':
+						case '.':
+							break;
+						default:
+							return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	/// name corresponds to some sort of URL
+	bool isNameSpaceURI(XmlString name)
+	{
+		XmlString scheme, restof;
+
+		auto sepct = splitNameSpace(name, scheme, restof);
+		if (sepct == 0)
+			return false;
+		// scheme names are presumed to be ASCII
+		if (!isURIScheme(scheme))
+			return false;
+
+		// check that the restof is ASCII
+		foreach(dchar nc ; restof)
+		{
+			if (nc > 0x7F)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/// more relaxed definition of IRI
+	bool isNameSpaceIRI(XmlString name)
+	{
+		XmlString scheme, restof;
+
+		auto sepct = splitNameSpace(name, scheme, restof);
+		if (sepct == 0)
+			return false;
+		// scheme names are presumed to be ASCII
+		if (!isURIScheme(scheme))
+			return false;
+
+		// TODO: no restrictions yet on restof
+
+		return true;
+	}
+
+	/** Split string on the first ':'.
+	*  Return number of ':' found.
+	*  If no first splitting ':' found return nmSpace = "", local = name.
+	*  If returns 1, and nmSpace.length is 0, then first character was :
+	*  if returns 1, and local.length is 0, then last character was :
+	**/
+	intptr_t splitNameSpace(XmlString name, out XmlString nmSpace, out XmlString local)
+	{
+		intptr_t sepct = 0;
+
+		auto npos = indexOf(name, ':');
+
+		if (npos >= 0)
+		{
+			sepct++;
+			nmSpace = name[0 .. npos];
+			local = name[npos+1 .. $];
+			if (local.length > 0)
+			{
+				XmlString temp = local;
+				npos = indexOf(temp,':');
+				if (npos >= 0)
+				{
+					sepct++;  // 2 is already too many
+					//temp = temp[npos+1 .. $];
+					//npos = indexOf(temp,':');
+				}
+			}
+		}
+		else
+		{
+			local = name;
+		}
+		return sepct;
+	}
 }// end template T

@@ -9,6 +9,7 @@ import std.format;
 import xml.util.gcstats;
 import xml.util.buffer;
 import xml.util.bomstring;
+
 version = ParseDocType;
 
 alias bool delegate(ref const(dchar)[] buf) MoreInputDg; // For a stream datasource
@@ -22,6 +23,9 @@ private enum BBCount { b1, b2, bend };
 /// an implementation headache.
 
 class XmlParser(T)  {
+
+	alias XmlParser!(T) ThisType;
+
     version(GC_STATS)
     {
         mixin GC_statistics;
@@ -461,9 +465,12 @@ class XmlParser(T)  {
 						}
 						break;
 					default:
+						// already approved 0x9, 0xA, 0xD,  0x20 - 0x7F, 0x85
 						immutable isSourceCharacter
-							=   (c <= 0xD7FF) ?  (c > 0x9F) || (c == 0x85)
-							: ((c >= 0xE000) && (c <= 0xFFFD)) || ((c >= 0x10000) && (c <= 0x10FFFF));
+							=   (c <= 0xD7FF) 
+							?  (c > 0x9F) || ((filterVersion_==1) && (c >= 0x20))
+							: ((c >= 0xE000) && (c <= 0xFFFD)) || ((c >= 0x10000) && (c <= 0x10FFFF)) ;
+							
 
 						if (!isSourceCharacter)
 						{
@@ -593,8 +600,11 @@ class XmlParser(T)  {
 		int					parenDepth;
 		int					docDeclare;
 
-		double				docVersion_;
-		double				maxVersion_;  // set if won't allow a newer version
+		double				docVersion_ = 1.0;  // what this document is
+		double				parentVersion_ = 0.0;  // if an entity, version of calling document
+		double				filterVersion_ = 1.0;  // the resulting filter standard
+
+		// set if won't allow a newer version
 
 		dchar				front = 0;
 		bool				empty  = true;
@@ -687,16 +697,26 @@ class XmlParser(T)  {
 		// called from doXmlDeclaration
 		void setXmlVersion(double value)
 		{
-			if (maxVersion_ >= 1.0 && value > maxVersion_)
-				throw errors_.makeException(format("XML version higher than expected: %s > %s", value, maxVersion_), XmlErrorLevel.FATAL);
+			// Tricky. If 
+			
 			if ((value != 1.0) && (value != 1.1))
 			{
 				uint major = cast(uint) value;
 				if (major != 1 || maxEdition < 5)
-					throw errors_.makeException(format("XML version %s not supported ",value));
+					throw errors_.makeException(format("XML version %s not supported ",value),XmlErrorLevel.ERROR);
 			}
 			docVersion_ = value;
-			minVersion11_ = (value > 1.0);
+			if (isEntity)
+			{
+				if (docVersion_ > parentVersion_)
+					throw errors_.makeException(format("Entity version %s > Document version %s", docVersion_, parentVersion_), XmlErrorLevel.FATAL);
+				filterVersion_ = parentVersion_;
+			}
+			else 
+				filterVersion_ = docVersion_;
+			
+			minVersion11_ = (filterVersion_ > 1.0);
+
 			if (minVersion11_)
 			{
 				isNameStartFn = &isNameStartChar11;
@@ -921,7 +941,7 @@ class XmlParser(T)  {
 					}
 					catch (XmlError xm)
 					{
-						throw xm;
+						throw errors_.caughtException(xm, xm.level);
 					}
 					catch (Exception ex)
 					{
@@ -2018,6 +2038,9 @@ class XmlParser(T)  {
         return (entity is null) || (entity.isInternal_);
     }
 
+	@property double xmlVersion() const {
+		return filterVersion_;
+	}
     void setParameter(string name, Variant n)
     {
 		switch(name)
@@ -4261,26 +4284,8 @@ class XmlParser(T)  {
 			errors_.pushError(format("Cannot find file %s",uri),XmlErrorLevel.ERROR);
             return; // TODO: Exception?, record error
 		}
-		auto ep = new XmlParser!T();
-		ep.errorInterface = this.errors_;
-		ep.docInterface = this.events_;
-		ep.eventMode_ = true;
-		ep.systemPaths_ = systemPaths_.dup;
-        ep.setXmlVersion(this.docVersion_);
-		ep.maxVersion_ = this.docVersion_;
 
-        ep.frontFilterOn();
-		ep.dtd_ = dtd_;
-		ep.isStandalone_ = false;
-		ep.isEntity = true;
-		ep.validate_ = validate_;
-		bool wasInternal = dtd_.isInternal_;
-		dtd_.isInternal_ = false;
-		scope(exit)
-		{
-			dtd_.isInternal_ = wasInternal;
-		}
-
+		auto ep = prepChildParser();
 		auto s = new BufferedFile(uri);
 		auto sf = new XmlStreamFiller(s);
 		ulong	pos;
@@ -4290,12 +4295,50 @@ class XmlParser(T)  {
 			return sf.fillData(data,pos);
 		}
 		ep.initSource(&getData);
+        ep.frontFilterOn();
+		ep.dtd_ = dtd_;
+		ep.isStandalone_ = false;
+		
+		bool wasInternal = dtd_.isInternal_;
+		dtd_.isInternal_ = false;
+		scope(exit)
+		{
+			dtd_.isInternal_ = wasInternal;
+		}
+
 
 		events_.startDoctype(this);
 		ep.docTypeInnards(DocEndType.noDocEnd);
 		events_.endDoctype(this);
     }
+	// get ready a parser to read ExternalDTD or System Entity
+	private ThisType prepChildParser()
+	{
+		auto ep = new XmlParser!T();
+        ep.isEntity = true;
+		ep.validate_ = validate_;
+		ep.parentVersion_ = this.docVersion_;
+        ep.setXmlVersion(this.docVersion_); // until we know
 
+		// set prepareThrow handler
+
+		ep.docInterface = this.events_;
+		ep.errorInterface = this.errors_;
+		ep.eventReturn = this.results_;
+		ep.eventMode_ = true;
+
+        string[]	paths;
+
+        if (inParamEntity())
+        {
+            paths ~= entity.baseDir_;
+        }
+        paths ~= systemPaths_;
+        ep.systemPaths_ = paths;
+
+		
+		return ep;
+	}
 	// Set up a new parser, using same IXMLEvents. Use current Xml version
     bool readSystemEntity(EntityData entity)
     {
@@ -4313,34 +4356,7 @@ class XmlParser(T)  {
 			return false;
 		}
 
-		/*if (!isReadable(uri))
-			throw errors_.makeException(format("%s is empty or unreadable",uri));*/
-
-
-		auto ep = new XmlParser!T();
-        ep.setXmlVersion(this.docVersion_);
-		ep.maxVersion_ = this.docVersion_;
-
-        ep.isEntity = true;
-		ep.validate_ = validate_;
-		// set prepareThrow handler
-
-		ep.docInterface = this.events_;
-		ep.errorInterface = this.errors_;
-		ep.eventReturn = this.results_;
-		ep.eventMode_ = true;
-
-		// if looking an entity, maybe check if current context is entity
-        string[]	paths;
-
-        if (inParamEntity())
-        {
-            paths ~= entity.baseDir_;
-        }
-        paths ~= systemPaths_;
-        ep.systemPaths_ = paths;
-		ep.events_ = events_;
-
+		auto ep = prepChildParser();
 		auto s = new BufferedFile(uri);
 		auto sf = new XmlStreamFiller(s);
 		ulong	pos;
@@ -4349,8 +4365,8 @@ class XmlParser(T)  {
 		{
 			return sf.fillData(data,pos);
 		}
-		ep.initSource(&getData);
 
+		ep.initSource(&getData);
         if (ep.matchInput("<?xml"))
         {
             ep.markupDepth++;

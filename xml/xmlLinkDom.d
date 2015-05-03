@@ -28,6 +28,17 @@ version(TagNesting)
 
 import xml.util.bomstring;
 
+
+
+
+
+
+
+/// check that the URI begins with a scheme name
+/// scheme        = alpha *( alpha | digit | "+" | "-" | "." )
+
+
+
 class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 {
     version(GC_STATS)
@@ -39,6 +50,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		}
     }
 	alias xmlt!T.XmlString XmlString;
+	alias xmlt!T.xmlNamespaceURI	xmlNamespaceURI;
+	alias xmlt!T.xmlnsURI			xmlnsURI;
+
 	alias xmlt!T.XmlBuffer	XmlBuffer;
 	alias xmlt!T.XmlEvent XmlEvent;
 	alias xmlt!T.IXmlErrorHandler IXmlErrorHandler;
@@ -49,9 +63,12 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	alias XMLDOM!T.ChildNode ChildNode;
 
 	alias XMLDOM!T.AttributeMap		AttributeMap;
+	alias XMLDOM!T.AttrNS	AttrNS;
 	alias XMLDOM!T.Element	Element;
+	alias XMLDOM!T.ElementNS	ElementNS;
 	alias XMLDOM!T.Document	 Document;
 	alias XMLDOM!(T).NameSpaceSet	NameSpaceSet;
+	alias XMLDOM!(T).NamedNodeMap	NamedNodeMap;
 	alias XMLDOM!(T).Text	Text;
 	alias XMLDOM!(T).DOMConfiguration DOMConfiguration;
 	alias XMLDOM!T.DocumentType DocumentType;
@@ -62,6 +79,8 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	alias XMLDTD!T.AttributeList AttributeList;
 	alias XMLDTD!T.ElementDef  ElementDef;
 	alias XMLDTD!T.EntityData EntityData;
+	alias XMLDTD!T.isNameSpaceIRI	isNameSpaceIRI;
+	alias XMLDTD!T.isNameSpaceURI	isNameSpaceURI;
 
 	private struct ElementLevel {
 		Node		n_;
@@ -240,11 +259,11 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		}
 		return ex;
 	}
-	Exception caughtException(Exception x)
+	Exception caughtException(Exception x, XmlErrorLevel level)
 	{
 		auto s = x.toString();
-		pushError(s, XmlErrorLevel.FATAL);
-		return preThrow(new XmlError(s, XmlErrorLevel.FATAL));
+		pushError(s, level);
+		return preThrow(new XmlError(s, level));
 	}
 
 	Exception makeException(string s, XmlErrorLevel level = XmlErrorLevel.FATAL)
@@ -292,6 +311,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			auto v = conf.getParameter(s);
 			parser_.setParameter(s,v);
 		}
+		namespaceAware_ = parser_.namespaces();
 	}
 
     void setParameter(string name, Variant n)
@@ -327,8 +347,282 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 				break;
 		}
     }
+	NameSpaceSet reviewAttrNS(ElementNS elem, NameSpaceSet pnss)
+    {
+        // A namespace definition <id> exists if there is a xmlns:<id>="URI" in the tree root.
+        // for each attribute, check if the name is a namespace specification
+
+        NamedNodeMap amap = elem.getAttributes();
+        if (amap is null)
+            return pnss;
+
+        AttrNS rdef;			// attribute which defines a namespace
+        AttrNS* pdef;
+        NameSpaceSet nss;
+        // attributes which are not namespace declarations
+        AttrNS[]     alist;
+        XmlString prefix;
+        XmlString nsURI;
+        XmlString localName;
+        XmlString atname;
+		bool      onPrefix;
+
+        auto app = appender(alist);
 
 
+        bool validate =  parser_.validate();
+        int nslistct = 0;
+
+        bool isNameSpaceDef;
+        // collect any new namespace definitions
+        double xml_version = parser_.xmlVersion();
+
+        // divide the attributes into those that specify namespaces, and those that do not.
+        foreach(a ; amap)
+        {
+            AttrNS nsa = cast(AttrNS) a;
+            atname = nsa.getName();
+
+            checkSplitName(atname, prefix, localName);
+			
+            if (prefix.length > 0)
+            {
+                isNameSpaceDef = (cmp("xmlns",prefix) == 0);
+				onPrefix = true;
+            }
+            else
+            {
+                isNameSpaceDef = (cmp("xmlns",atname) == 0);
+				onPrefix = false;
+            }
+
+            if (isNameSpaceDef)
+            {
+                if (nss is null)
+                {
+                    nss = new NameSpaceSet(elem, pnss);
+                    pnss = nss;
+                }
+
+                bool bind = true;
+                nsURI = nsa.getValue();
+                localName = nsa.getLocalName();
+                if (nsURI.length == 0) // its an unbinding
+                {
+                    if ((localName.length > 0) && (localName != "xmlns"))
+                    {
+                        // default namespace unbinding ok for 1.0
+                        bind = false;
+                        // is it an error to unbind a non-existing name space?
+                        nss.nsdefs_[localName] = nsa; // register as unbound
+                    }
+                    else
+                    {
+						if (onPrefix)
+							throw makeException(format("Attempt to unbind xmlns %s",atname));
+						else
+							if (validate && (xml_version == 1))
+								pushError(format("Attempt to unbind xmlns %s",atname),XmlErrorLevel.INVALID);
+                    }
+                }
+                else
+                {
+                    // A bit of validation for the URI / IRI
+                    if (xml_version > 1.0)
+                    {
+                        if (!isNameSpaceIRI(nsURI))
+                            throw this.makeException(format("Malformed IRI %s", nsURI),XmlErrorLevel.ERROR);
+                    }
+                    else if(!isNameSpaceURI(nsURI))
+                    {
+                        throw this.makeException(format("Malformed URI %s", nsURI),XmlErrorLevel.ERROR);
+                    }
+                }
+                if (bind)
+                {
+                    // reserved namespaces check
+                    if (prefix.length == 0)
+                    {
+                        if (localName == "xmlns")
+                        {
+                            if (nsURI == xmlNamespaceURI || nsURI == xmlnsURI)
+                                throw this.makeException(format("Cannot set default namespace to %s",nsURI));
+							else if (validate && (xml_version == 1))
+								pushError("Attempt to bind xmlns",XmlErrorLevel.INVALID);
+                        }
+                    }
+                    else if (prefix == "xml")
+                    {
+                        if (nsURI != xmlNamespaceURI)
+                            throw this.makeException(format("xml namespace URI %s is not the reserved value %s",nsURI, xmlNamespaceURI));
+
+                    }
+
+                    else if (prefix == "xmlns")
+                    {
+                        if (localName == "xmlns")
+                        {
+                            throw this.makeException(format("xmlns is reserved, but declared with URI: %s", nsURI));
+                        }
+                        else if (localName == "xml")
+                        {
+                            if (nsURI != xmlNamespaceURI)
+                                throw this.makeException(format("xml prefix declared incorrectly ", nsURI));
+                            else if (validate)
+                                this.pushError(format("xml namespace URI %s must only have prefix xml",xmlNamespaceURI),XmlErrorLevel.INVALID);
+                            goto DO_BIND;
+                        }
+                        else if (localName == "xml2")
+                        {
+                            if (validate)
+                                this.pushError("Binding a reserved prefix xml2",XmlErrorLevel.INVALID);
+                        }
+
+                        if (nsURI == xmlNamespaceURI)
+                        {
+                            throw this.makeException(format("xml namespace URI cannot be bound to another prefix: %s", nsURI));
+                        }
+                        if (nsURI == xmlnsURI)
+                        {
+                            throw this.makeException(format("xmlns namespace URI cannot be bound to another prefix: %s", nsURI));
+                        }
+                    }
+				DO_BIND:
+                    nss.nsdefs_[localName] = nsa; // register as bound to URI value
+                }
+            }
+            else
+            {
+                app.put(nsa);
+            }
+        }
+        bool needNS;
+        alist = app.data();
+        // assign namespace URIS
+
+        string noNSMsg(AttrNS ans)
+        {
+            return format("No namespace for attribute %s",ans.getName());
+        }
+        foreach(nsa ; alist)
+        {
+            prefix = nsa.getPrefix();
+            needNS = true;
+            if (pnss !is null)
+            {
+                pdef = prefix in pnss.nsdefs_;
+                if (pdef !is null)
+                {
+                    rdef = *pdef;
+
+                    if (rdef.getValue() is null)
+                        pushError(format("Namespace %s is unbound",prefix),XmlErrorLevel.ERROR);
+                    nsa.setURI(rdef.getValue());
+                    needNS = false;
+                }
+            }
+
+            if (needNS)
+            {
+                if (prefix == "xml")
+                {
+                    // special allowance
+                    if (validate)
+                    {
+                        pushError("Undeclared namespace 'xml'", XmlErrorLevel.INVALID);
+                    }
+                }
+                else if (prefix.length == 0)
+                {
+                    if (validate)
+                        pushError(noNSMsg(nsa), XmlErrorLevel.INVALID);
+                }
+                else
+					throw this.makeException(noNSMsg(nsa));
+            }
+
+        }
+
+        // pairwise check, prove no two attributes with same local name and different prefix have same URI
+        if (pnss !is null)
+        {
+            for(int nix = 0; nix < alist.length; nix++)
+            {
+                for(int kix = nix+1; kix < alist.length; kix++)
+                {
+                    AttrNS na = alist[nix];
+                    AttrNS ka = alist[kix];
+
+                    if (na.getLocalName() != ka.getLocalName())
+                    {
+                        continue;
+                    }
+
+                    // same local name and prefix is a duplicate name, so the prefixes must be be different.
+
+
+                    if (na.getNamespaceURI() == ka.getNamespaceURI())
+                    {
+                        string errMsg = format("Attributes with same local name and default namespace: %s and %s",na.getNodeName(), ka.getName());
+
+                        if (na.getPrefix() is null || ka.getPrefix() is null)
+                            pushError(errMsg,XmlErrorLevel.ERROR);
+                        else
+                            throw this.makeException(errMsg);
+                    }
+                }
+            }
+        }
+        checkErrorStatus();
+
+        return pnss;
+    }
+    void reviewElementNS(ElementNS elem, NameSpaceSet pnss)
+    {
+        // now review element name itself
+        XmlString prefix;
+        XmlString localName;
+        XmlString nsURI;
+
+        checkSplitName(elem.getNodeName(), prefix, localName);
+
+        bool needNS = (prefix.length > 0);
+
+        if (pnss !is null)
+        {
+            auto pdef = prefix in pnss.nsdefs_;
+            if (pdef !is null)
+            {
+                auto rdef = *pdef;
+                nsURI = rdef.getValue();
+                if (nsURI.length == 0)
+                {
+                    pushError(format("Namespace %s is unbound",prefix ),XmlErrorLevel.FATAL);
+                }
+                else
+                {
+                    elem.setURI(nsURI);
+                    needNS = false;
+                }
+            }
+
+        }
+        if (needNS)
+        {
+            if (prefix == "xmlns")
+            {
+                pushError(format("%s Elements must not have prefix xmlns",elem.getNodeName()),XmlErrorLevel.ERROR);
+            }
+			// unless this is DOCTYPE defined in a magic way
+			if ((this.dtdData_ !is null) && ((this.dtdData_.id_ == elem.getNodeName()) || (level_.def_ !is null)))
+			{
+				// overrides?
+			}
+			else 
+				throw makeException(format("No namespace found for %s", elem.getNodeName()),XmlErrorLevel.FATAL);
+        }
+        checkErrorStatus();
+    }
 	void makeTag(ref XmlEvent s, bool hasContent)
 	{
 		XmlString		tagName = s.data;
@@ -407,6 +701,20 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		{
 			node.setAttribute(n,v);
 		}
+
+        if (namespaceAware_)
+        {
+            if (parser_.namespaces())
+            {
+                ElementNS ens = cast(ElementNS) node;
+                if (ens)
+                {
+                    nsSet_ = reviewAttrNS(ens, nsSet_);
+                    reviewElementNS(ens, nsSet_);
+                }
+            }
+        }
+
 		if (!hasContent)	// no endTag with matching popBack will occur, so pop now.
 		{
 			auto slen = stack_.length;

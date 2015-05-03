@@ -31,8 +31,6 @@ import std.stream;
 import std.exception;
 import xml.xmlError;
 
-static const string xmlNamespaceURI = "http://www.w3.org/XML/1998/namespace";
-static const string xmlnsURI = "http://www.w3.org/2000/xmlns/";
 
 
 version(GC_STATS) {
@@ -1858,18 +1856,7 @@ protected:
     XmlString uriNS_;
     XmlString localName_;
 
-    package void setIdentity(XmlString nsURI, XmlString name)
-    {
-        id_ = name;
-        uriNS_ = nsURI;
-        auto pos =  std.string.indexOf(id_,':');
-        localName_ = (pos >= 0) ? id_[pos+1..$] : id_;
-    }
 
-    package void setURI(XmlString nsURI)
-    {
-        uriNS_ = nsURI;
-    }
 
 public:
     /// construct
@@ -1916,7 +1903,18 @@ public:
         na.setValue(value);
         setAttributeNode(na);
     }
+    void setIdentity(XmlString nsURI, XmlString name)
+    {
+        id_ = name;
+        uriNS_ = nsURI;
+        auto pos =  std.string.indexOf(id_,':');
+        localName_ = (pos >= 0) ? id_[pos+1..$] : id_;
+    }
 
+    void setURI(XmlString nsURI)
+    {
+        uriNS_ = nsURI;
+    }
 }
 
 
@@ -2508,18 +2506,8 @@ protected:
     XmlString uriNS_;
     XmlString localName_;
 
-    package void setIdentity(XmlString nsURI, XmlString name)
-    {
-        id_ = name;
-        uriNS_ = nsURI;
-        auto pos = std.string.indexOf(id_,':');
-        localName_ = (pos >= 0) ? id_[pos+1..$] : id_;
-    }
 
-    package void setURI(XmlString nsURI)
-    {
-        uriNS_ = nsURI;
-    }
+
 
 public:
     /// construct
@@ -2547,6 +2535,17 @@ public:
     {
         auto poffset = id_.length - localName_.length;
         return  (poffset > 0) ? id_[0..poffset-1] : "";
+    }
+    void setURI(XmlString nsURI)
+    {
+        uriNS_ = nsURI;
+    }
+    void setIdentity(XmlString nsURI, XmlString name)
+    {
+        id_ = name;
+        uriNS_ = nsURI;
+        auto pos = std.string.indexOf(id_,':');
+        localName_ = (pos >= 0) ? id_[pos+1..$] : id_;
     }
 
 };

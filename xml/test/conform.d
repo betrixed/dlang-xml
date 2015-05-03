@@ -72,7 +72,7 @@ void writeUsage()
         `conformance --input <filepath> [--test <id>] [skipfail]
         filepath -   - A special XML file in a w3c XML tests folder
         test  -      - Run only a particular test id
-        skipfail -   - If run all tests do not stop on first fail
+        --skipfail -   - If run all tests do not stop on first fail
 		summary -    - Do not print each test id - summary only
 		namespaceoff - Namespace aware turned off -
 		validate -   - turn on validation`;
@@ -117,7 +117,7 @@ int main(string[] args)
 				tests.summary = true;
 				break;
 
-			case "skipfail":
+			case "--skipfail":
 				tests.stopOnFail = false;
 				break;
 

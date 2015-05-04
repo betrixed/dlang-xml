@@ -15,10 +15,11 @@ Progress
 --------
 As this is big refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is nearly complete.
 
-The latest test suite is http://www.w3.org/XML/Test/xmlts20130923.tar.gz
+
 
 ### Console applications
-Conformance The conformance test suite versions are found on http://www.w3.org/XML/Test/
+Conformance The conformance test suite versions, all XML documents, are found on http://www.w3.org/XML/Test/
+The latest test suite is http://www.w3.org/XML/Test/xmlts20130923.tar.gz .
 Unpack the latest into the root directory, which should create a directory named xmlconf and use path to xmlconf.xml file as input.
 for instance me$ ./conformance64d --input ../../xmlconf/xmlconf.xml
 

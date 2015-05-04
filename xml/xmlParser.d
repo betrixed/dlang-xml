@@ -474,7 +474,7 @@ class XmlParser(T)  {
 
 						if (!isSourceCharacter)
 						{
-							uint severity = XmlErrorLevel.FATAL;
+							auto severity = XmlErrorLevel.FATAL;
 							// Check position for crappy check for conformance tests on invalid BOM characters.
 							if (lineChar_ == 0 && lineNumber_ == 0)
 								switch(front)
@@ -486,7 +486,7 @@ class XmlParser(T)  {
 									default:
 										break;
 								}
-							throw errors_.makeException(badCharMsg(front));
+							throw errors_.makeException(badCharMsg(front),severity);
 						}
 						lineChar_++;
 						break;

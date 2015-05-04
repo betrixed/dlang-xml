@@ -347,6 +347,12 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 				break;
 		}
     }
+
+	string unbindError(XmlString atname)
+	{
+		return format("Attempt to unbind %s",atname);
+	}
+
 	NameSpaceSet reviewAttrNS(ElementNS elem, NameSpaceSet pnss)
     {
         // A namespace definition <id> exists if there is a xmlns:<id>="URI" in the tree root.
@@ -409,8 +415,18 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 localName = nsa.getLocalName();
                 if (nsURI.length == 0) // its an unbinding
                 {
-                    if ((localName.length > 0) && (localName != "xmlns"))
+                    if (localName.length > 0)
                     {
+						if (localName == "xmlns" || localName == "xml")
+						{
+							if (xml_version == 1)
+							{
+								if (validate )
+									pushError(unbindError(atname),XmlErrorLevel.INVALID);
+							}
+							else
+								throw makeException(unbindError(atname));
+						}
                         // default namespace unbinding ok for 1.0
                         bind = false;
                         // is it an error to unbind a non-existing name space?
@@ -419,10 +435,10 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                     else
                     {
 						if (onPrefix)
-							throw makeException(format("Attempt to unbind xmlns %s",atname));
+							throw makeException(unbindError(atname));
 						else
 							if (validate && (xml_version == 1))
-								pushError(format("Attempt to unbind xmlns %s",atname),XmlErrorLevel.INVALID);
+								pushError(unbindError(atname),XmlErrorLevel.INVALID);
                     }
                 }
                 else
@@ -611,7 +627,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         {
             if (prefix == "xmlns")
             {
-                pushError(format("%s Elements must not have prefix xmlns",elem.getNodeName()),XmlErrorLevel.ERROR);
+                throw makeException(format("%s Elements must not have prefix xmlns",elem.getNodeName()));
             }
 			// unless this is DOCTYPE defined in a magic way
 			if ((this.dtdData_ !is null) && ((this.dtdData_.id_ == elem.getNodeName()) || (level_.def_ !is null)))

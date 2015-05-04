@@ -1,0 +1,21 @@
+Error on test 2581
+
+Each xmlconf.xml refers to tests within its subdirectory tree.
+
+In the root xmlconf directory xmlconf.xml, there is an inconsistancy,
+such that the path referred to in 
+
+<!ENTITY eduni-misc         SYSTEM "eduni/misc/ht-bh.xml">
+does not correspond to 
+<TESTCASES xml:base="eduni/namespaces/misc/">
+    &eduni-misc;
+</TESTCASES>
+
+and should be <TESTCASES xml:base="eduni/misc/">
+
+as the misc in the archive is a subdirectory eduni
+
+The error is repeated in xmlconf/eduni/xmlconf.xml,
+where <TESTCASES xml:base="namespaces/misc/">
+
+should be <TESTCASES xml:base="misc/">

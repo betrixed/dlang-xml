@@ -13,7 +13,7 @@ The xmlSlicer is mainly used as performance comparison.
 
 Progress
 --------
-As this is big refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is nearly complete.
+As this is big refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is nearly complete. 3 testcases need fixing.
 
 
 

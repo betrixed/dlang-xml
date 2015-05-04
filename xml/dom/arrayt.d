@@ -8,7 +8,7 @@ Authors: Michael Rynn
 module xml.dom.arrayt;
 
 
-import alt.buffer;
+import xml.util.buffer;
 import xml.util.print;
 
 import std.string, std.conv, std.exception, std.stream;
@@ -27,7 +27,7 @@ debug(VERBOSE)
 /// Base class Object string toString() may require translation.
 /// toXml()
 /// Elements, Attributes, nodes, have no parent or owner member.
-import xml.ixml, xml.util.print;
+import xml.txml, xml.util.print;
 
 template XMLARRAY(T) {
 

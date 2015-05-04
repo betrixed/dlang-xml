@@ -134,18 +134,20 @@ import std.ascii;
 import std.string;
 import std.encoding;
 import std.stdio;
+import std.stdint;
+
 
 /**
 	On investigation, using GC_STATS instance counting, it was found that with a big document load (see bigload project),
 too many Tag, ElementParser, and Element objects seemed to hang around in GC land. Like fleas on a cat.
 Cause unknown, maybe lots of function closures hanging around with references on heap. The GC should be better than this.
 
-This was 'fixed' only by ensuring the transitory nature of such objects. 
+This was 'fixed' only by ensuring the transitory nature of such objects.
 The 'Element' object passed on the EndTag event, is guaranteed transitory, by destroy after use.
-ElementParser is of course, an enforced transient. 
+ElementParser is of course, an enforced transient.
 The explode() method is available on the DOM tree to enforce destruction.
 
-GC_STATS also noted that 3 times as many Tag objects were created as number of Element objects. 
+GC_STATS also noted that 3 times as many Tag objects were created as number of Element objects.
 This prompted a implementation alteration.
 The Element object no longer has a Tag sub object, but uses direct fields of name, attributes, tag type, tagString.
 A TagData structure in the ElementParser eliminated some of the creation and destruction of Tag objects.
@@ -158,7 +160,7 @@ This technically works, but has slower performance.  It was also a little hard t
 
 In theory a valid XML document should throw no exceptions at all during a check.
 
-In no way will this be a check for more obscure issues.  DOCTYPE is still not supported. 
+In no way will this be a check for more obscure issues.  DOCTYPE is still not supported.
 
 
 The check functions were changed to only throw errors if a not well formed condition is encountered.
@@ -479,11 +481,11 @@ void checkCharRef(ref string s, out dchar c) // rule 66
 		c += n;
 		s = s[1..$];
 	}
-	if (!isChar(c)) 
+	if (!isChar(c))
 		failCheck(s,format("U+%04X is not a legal character",c));
-	if (s.length == 0 || s[0] != ';') 
+	if (s.length == 0 || s[0] != ';')
 		failCheck(s,"expected ;");
-	else 
+	else
 		s = s[1..$];
 }
 /**
@@ -785,7 +787,7 @@ class Element : Item
 		{
 			item.explode();
 			destroy(item);
-		}	
+		}
 		items = [];
 		texts = [];
 		cdatas = [];
@@ -801,7 +803,7 @@ class Element : Item
 		~this()
 		{
 			gcStatsSum.dec();
-			
+
 
 		}
 	}
@@ -2004,7 +2006,7 @@ class ElementParser
             s = xml;
             this();
 			tag_ = new Tag(t);
-			
+
         }
     }
 
@@ -2280,14 +2282,14 @@ class ElementParser
             else if (startsWith(*s,"<"))
             {
 				TagData tdata =  TagData(*s,true); // gets all attributes
-				
+
 				// why would it be null? - for DocumentParser
                 if (tag_ is null)
 				{
 					tag_ = new Tag(tdata);
                     return; // Return to constructor of derived class
 				}
-				
+
 				if (tdata.isStart)
 				{
 					auto handler = tdata.name in onStartTag;
@@ -2327,7 +2329,7 @@ class ElementParser
 					if (handler2 !is null)
 					{
 						string text;
-						
+
 						immutable(char)* p = eTag.tagString.ptr
 							+ eTag.tagString.length;
 						immutable(char)* q = tdata.tagString.ptr;
@@ -2337,7 +2339,7 @@ class ElementParser
 						if (text.length != 0) element ~= new Text(text);
 						(*handler2)(element);
 						element.explode();
-						
+
 					}
 					if (eTag !is tag_)
 						destroy(eTag);
@@ -2354,7 +2356,7 @@ class ElementParser
 					{
 						 handler1 = null in onStartTag;
 					}
-                    if (handler1 !is null) 
+                    if (handler1 !is null)
 					{
 						auto parser = new ElementParser(tdata,&s2);
 						(*handler1)(parser);
@@ -2371,7 +2373,7 @@ class ElementParser
 						auto element = new Element(tdata);
 						(*handler2)(element);
 						element.explode();
-					}	
+					}
                 }
             }
             else
@@ -2397,8 +2399,8 @@ class ElementParser
 }
 
 
- 
-    // Helper functions 
+
+    // Helper functions
 bool foundLiteral(string literal, ref string s)
 {
 	if (s.startsWith(literal))
@@ -2411,9 +2413,9 @@ bool foundLiteral(string literal, ref string s)
 
 void checkLiteral(string literal,ref string s)
 {
-    if (!s.startsWith(literal)) 
+    if (!s.startsWith(literal))
 		failCheck(s,"Expected literal \""~literal~"\"");
-	s = s[literal.length..$]; 
+	s = s[literal.length..$];
 }
 
 void checkEnd(string end,ref string s)
@@ -2422,7 +2424,7 @@ void checkEnd(string end,ref string s)
     if (n == -1) throw new Err(s,"Unable to find terminating \""~end~"\"");
     s = s[n..$];
     checkLiteral(end,s);
-} 
+}
 
 
 
@@ -2446,9 +2448,9 @@ void check(string s)
 	auto entire = s; // remember entire
     try
     {
-		
+
 		v.fullCheck(s);
-		
+
         if (s.length != 0) throw new Err(s,"Junk found after document");
     }
     catch(Err e)
@@ -2791,7 +2793,7 @@ private
 /// attempt to provide same style but with good old stack and return codes.
 
 struct CheckState {
-	string		name;	
+	string		name;
 	string		ctx;
 
 	this(string lname, string save)
@@ -2829,13 +2831,13 @@ class XmlValidate {
 	Appender!(CheckException[])		errors_;
 	XmlValid	status;
 	Requirement	require;
-	
+
 	CheckState getContext()
 	{
 		auto sdata = stack_.data;
 		auto slen = sdata.length;
 		if (slen > 0)
-		{	
+		{
 			slen--;
 			return sdata[slen];
 		}
@@ -2853,7 +2855,7 @@ class XmlValidate {
 		auto sdata = stack_.data;
 		auto slen = sdata.length;
 		if (slen > 0)
-		{	
+		{
 			slen--;
 			stack_.shrinkTo(slen);
 			return;
@@ -2893,11 +2895,11 @@ class XmlValidate {
         auto level = pushContext("Literal",s);
 		scope(exit)
 			popContext();
-        if (!s.startsWith(literal)) 
+        if (!s.startsWith(literal))
 			failed("Expected literal \""~literal~"\"");
 		s = s[literal.length..$];
     }
-	uint spaceCount(ref string s)
+	uintptr_t spaceCount(ref string s)
 	{
 		auto start = s;
 		munch(s,"\u0020\u0009\u000A\u000D");
@@ -2955,7 +2957,7 @@ class XmlValidate {
     }
     void many(alias f)(ref string s)
     {
-		int ct = 0;
+		uintptr_t ct = 0;
         do
         {
             ct = f(s,Requirement.MANY);
@@ -2981,7 +2983,7 @@ class XmlValidate {
 
         auto ct = spaceCount(s);
         if (foundLiteral("encoding",s))
-		{	
+		{
 			if (ct < 1)
 				failSpace();
 			checkEq(s);
@@ -3006,7 +3008,7 @@ class XmlValidate {
 		auto level = pushContext("XMLDecl",s);
 		scope(exit)
 			popContext();
-		if (foundLiteral("<?xml",s)) 
+		if (foundLiteral("<?xml",s))
 		{
 			// xml dec is not compulsory, once in , better be good
 			checkVersionInfo(s,Requirement.NEED);
@@ -3022,7 +3024,7 @@ class XmlValidate {
 		scope(exit)
 			popContext();
         munch(s,"a-zA-Z0-9_.:-"); // not very specific
-        if (level.same(s)) 
+        if (level.same(s))
 			failed();
     }
 	void checkYesNo(ref string s, Requirement req)
@@ -3103,7 +3105,7 @@ class XmlValidate {
         if (foundLiteral("<!--",s))
 		{
 			ptrdiff_t n = s.indexOf("--");
-			if (n == -1) 
+			if (n == -1)
 				failed("unterminated comment");
 			s = s[n..$];
 			checkLiteral("-->",s);
@@ -3127,19 +3129,19 @@ class XmlValidate {
 			checkEnd("?>",s);
         }
     }
-    int checkMisc(ref string s, Requirement req) // rule 27
+    uintptr_t checkMisc(ref string s, Requirement req) // rule 27
     {
         auto level = pushContext("Misc",s);
 		scope(exit)
 			popContext();
-		auto ct = spaceCount(s); 
-		if (s.startsWith("<!--")) 
-		{ 
-			need!(checkComment)(s); 
+		auto ct = spaceCount(s);
+		if (s.startsWith("<!--"))
+		{
+			need!(checkComment)(s);
 			ct++;
 		}
-		else if (s.startsWith("<?"))   
-		{ 
+		else if (s.startsWith("<?"))
+		{
 			need!(checkPI)(s);
 			ct++;
 		}
@@ -3151,7 +3153,7 @@ class XmlValidate {
 		scope(exit)
 			popContext();
         string sname,ename,t;
-		checkTag(s,t,sname); 
+		checkTag(s,t,sname);
 
         if (t == "STag")
         {
@@ -3168,13 +3170,13 @@ class XmlValidate {
 
     bool checkName(ref string s, out string name) // rule 5
     {
-        if (s.length == 0) 
+        if (s.length == 0)
 			return false;
         int n;
         foreach(int i,dchar c;s)
         {
             if (c == '_' || c == ':' || isLetter(c)) continue;
-            if (i == 0) 
+            if (i == 0)
 				return false; // not a beginning of name
             if (c == '-' || c == '.' || isDigit(c)
                 || isCombiningChar(c) || isExtender(c)) continue;
@@ -3212,10 +3214,10 @@ class XmlValidate {
 		dchar c;
 		if (s.startsWith("&#"))
 			checkCharRef(s,c);
-		else 
+		else
 			checkEntityRef(s);
     }
-	int checkAttribute(ref string s, Requirement req) // rule 41
+	uintptr_t checkAttribute(ref string s, Requirement req) // rule 41
     {
         auto level = pushContext("Attribute",s);
 		scope(exit)
@@ -3260,33 +3262,33 @@ class XmlValidate {
 			popContext();
         while (s.length != 0)
         {
-			if (s.startsWith("&"))			
-			{ 
-				checkReference(s); 
+			if (s.startsWith("&"))
+			{
+				checkReference(s);
 			}
-            else if (s.startsWith("<!--"))     
-			{ 
-				checkComment(s,Requirement.NEED); 
+            else if (s.startsWith("<!--"))
+			{
+				checkComment(s,Requirement.NEED);
 			}
-            else if (s.startsWith("<?"))      
-			{ 
-				checkPI(s,Requirement.NEED); 
+            else if (s.startsWith("<?"))
+			{
+				checkPI(s,Requirement.NEED);
 			}
-            else if (s.startsWith(cdata)) 
-			{ 
-				checkCDSect(s); 
+            else if (s.startsWith(cdata))
+			{
+				checkCDSect(s);
 			}
-            else if (s.startsWith("</"))       
-			{ 
-				break; 
+            else if (s.startsWith("</"))
+			{
+				break;
 			}
-            else if (s.startsWith("<"))        
-			{ 
-				checkElement(s); 
+            else if (s.startsWith("<"))
+			{
+				checkElement(s);
 			}
-            else 
-			{ 
-				checkCharData(s); 
+            else
+			{
+				checkCharData(s);
 			}
         }
     }
@@ -3304,7 +3306,7 @@ class XmlValidate {
         auto level = pushContext("AttValue",s);
 		scope(exit)
 			popContext();
-        if (s.length == 0) 
+        if (s.length == 0)
 			failed();
         char c = s[0];
         if (c != '\u0022' && c != '\u0027')
@@ -3357,11 +3359,11 @@ class XmlValidate {
 			spaceCount(s);
 			if (s.length == 0)
 				break;
-            if (s.startsWith("&")) 
+            if (s.startsWith("&"))
 				break;
-            if (s.startsWith("<")) 
+            if (s.startsWith("<"))
 				break;
-            if (s.startsWith("]]>")) 
+            if (s.startsWith("]]>"))
 				failed("]]> found within char data");
             s = s[1..$];
         }

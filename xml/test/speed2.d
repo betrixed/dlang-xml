@@ -13,7 +13,7 @@ version(GC_STATS)
 	import alt.gcstats;
 }
 
-public import std.xmlSlicer;
+import xml.std.xmlSlicer;
 import std.stdio;
 import core.memory;
 import std.random;
@@ -28,6 +28,7 @@ import xml.textInput;
 import xml.xmlParser;
 import xml.txml;
 import xml.xmlLinkDom;
+import xml.xmlArrayDom;
 
 struct Book
 {
@@ -135,7 +136,7 @@ void testXmlInput(string s)
 	}
 }
 
-/// run through a basic XML document but no construction 
+/// run through a basic XML document but no construction
 /// of DOM
 class SliceResults(T) : xmlt!T.NullDocHandler  {
 
@@ -164,7 +165,7 @@ auto dxmlMakeDoc(T,S)(immutable(S)[] s)
 	alias xml.dom.domt.XMLDOM!T	xmldom;
 
 	auto builder = new DXmlDomBuild!(T)();
-	auto doc = new xmldom.Document(); 
+	auto doc = new xmldom.Document();
 	builder.parseNoSlice!S(doc, s);
 	return doc;
 }
@@ -201,7 +202,7 @@ double testHackBuf(uintptr_t repeats, uintptr_t bsize)
 		hackBuf.length = 1;
 		for(uintptr_t k = 0; k < bsize; k++)
 			hackBuf ~= 'X';
-		
+
 	}
 	sw.stop();
 	auto stime = timedSeconds(sw);
@@ -220,7 +221,7 @@ double testNativeBuf(uintptr_t repeats, uintptr_t bsize)
 		nativeBuf.length = 1;
 		for(uintptr_t k = 0; k < bsize; k++)
 			nativeBuf ~= 'X';
-		
+
 	}
 	sw.stop();
 	auto stime = timedSeconds(sw);
@@ -327,7 +328,7 @@ void runTests(string inputFile, uintptr_t runs)
                 default:
                     break;
 			}
-			
+
 			sw.reset();
 		}
 		foreach(v ; sample)
@@ -358,7 +359,7 @@ void testAttribute()
 	alias XMLAttribute!char		 attr_t;
 	alias attr_t.XmlAttribute     XmlAttribute;
 	alias attr_t.AttributeMap     AttributeMap;
-	
+
 	AttributeMap map;
 
 	XmlAttribute a1 = XmlAttribute("a1","value1");
@@ -371,7 +372,7 @@ void testAttribute()
 	map.push(a1);
 
 	map.removeName(a2.name);
-	assert(map.length==2); 
+	assert(map.length==2);
 	writefln("count = %s", map.length);
     for(auto i = 0; i < map.length; i++)
 	{
@@ -430,7 +431,7 @@ void main(string[] argv)
             usage();
             return;
         }
-		
+
 		runTests(inputFile,runs);
 
     }
@@ -442,7 +443,7 @@ void main(string[] argv)
 		//version(TrackCount)
 		//	listTracks();
 		writeln("Enter to exit");
-		
+
 	}
 	writeln("All done");
 	getchar();
@@ -491,7 +492,7 @@ void unit_test_1()
 	catch(CheckException e)
 	{
 		auto msg = e.toString();
-		int n = msg.indexOf("end tag name 'genres' differs"~
+		auto n = msg.indexOf("end tag name 'genres' differs" ~
 										" from start tag name 'genre'");
 		assert(n != -1);
 	}

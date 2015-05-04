@@ -16,13 +16,13 @@ module xml.util.print;
 
 version=ATTRIBUTE_BLOCK;
 
-import xml.xmlchar;
+import xml.xmlChar;
 import std.array;
 import std.exception;
 import std.conv;
 import std.string;
 import std.stdint;
-import alt.buffer;
+import xml.util.buffer;
 
 
 template XMLPrint(T)

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_workspace_file>
+	<Workspace title="DXML">
+		<Project filename="speed/speed.cbp" />
+		<Project filename="bigload/bigload.cbp" />
+		<Project filename="conformance/conformance.cbp" />
+	</Workspace>
+</CodeBlocks_workspace_file>

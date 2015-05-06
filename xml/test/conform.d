@@ -63,8 +63,6 @@ import std.stdint;
 import xml.dom.domt, xml.util.read, xml.test.suite;
 import std.file;
 
-alias XMLTESTS!wchar.XmlString	XmlString;
-
 void writeUsage()
 {
 	writefln("Working directory is %s", getcwd());
@@ -82,38 +80,34 @@ void writeUsage()
 	getchar();
 }
 
-int main(string[] args)
+
+int TestType(T)(string[] args)
 {
-    int oix = 0;
-	auto tests = new XMLTESTS!wchar.Tests();
-
+	auto tests = new XMLTESTS!T.Tests();
+	alias XMLTESTS!T.XmlString XmlString;
     // this registers for this thread and call type.
-    EUC_JP!(CharIR).register("EUC-JP");
 
-    if (args.length <= 1)
-    {
-        writeUsage();
-        return 0;
-    }
+	
+	int oix = 0;
     while(oix < args.length)
     {
         auto option = args[oix];
 
         switch(option)
         {
-			case "xml11":
+			case "--xml11":
 				tests.xmlversion11 = true;
 				break;
-			case "xml10":
+			case "--xml10":
 				tests.xmlversion11 = false;
 				break;
-			case "validate":
+			case "--validate":
 				tests.validate = true;
 				break;
-			case "namespaceoff":
+			case "--namespaceoff":
 				tests.namespaceAware = false;
 				break;
-			case "summary":
+			case "--summary":
 				tests.summary = true;
 				break;
 
@@ -140,7 +134,24 @@ int main(string[] args)
         }
         oix++;
     }
-	return tests.perform();
+	return tests.perform;
+}
+
+int main(string[] args)
+{
+    if (args.length <= 1)
+    {
+        writeUsage();
+        return 0;
+    }
+	EUC_JP!(CharIR).register("EUC-JP");
+	
+	int result = TestType!(char)(args);
+	if (result == 0)
+	{
+		result = TestType!(wchar)(args);
+	}
+	return result;
 
 
 }

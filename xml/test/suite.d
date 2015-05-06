@@ -12,7 +12,7 @@ import std.algorithm;
 import std.file, std.conv, std.variant, std.string;
 template XMLTESTS(T)
 {
-	alias immutable(T)[] XmlString;
+	alias xmlt!(T).XmlString  XmlString;
 
 	alias XMLDOM!(T).Element			Element;
 	alias XMLDOM!(T).Document			Document;
@@ -36,6 +36,7 @@ template XMLTESTS(T)
 		XmlString  namespace;
 		string  edition; // some tests are XML edition dependent (blast: why cannot this have been put in the version=?)
 		bool    passed;
+		bool    summary;
 
 		void failMessage()
 		{
@@ -88,7 +89,7 @@ template XMLTESTS(T)
 						{
 							found = true;
 							writefln("Test = No. %s : %s ", t.order_,testName);
-							getchar();
+							getchar(); // wait for setting up break points in debugger
 							XmlConfResult rt1 = runTest(t,baseDir,true);
 							showResult(rt1);
 							XmlConfResult rt0 = runTest(t,baseDir,false);
@@ -108,7 +109,7 @@ template XMLTESTS(T)
 					}
 				}
 			}
-			getchar();
+			//getchar();
 			return 0;
 
 
@@ -288,6 +289,7 @@ template XMLTESTS(T)
 						if (t !is null)
 						{
 							t.order_ = ++orderNum;
+							t.summary = this.summary;
 							tests[t.id] = t;
 						}
 						visit.doneElement();
@@ -473,6 +475,7 @@ template XMLTESTS(T)
 
 		try
 		{
+
 			if (t.uri.length == 0)
 				writeln("t.uri ", t.uri);
 			if (t.uri.endsWith("pr-xml-euc-jp.xml") || t.uri.endsWith("weekly-euc-jp.xml"))
@@ -499,28 +502,48 @@ template XMLTESTS(T)
 			config.setParameter("error-handler",Variant( cast(DOMErrorHandler) result) );
 			config.setParameter("edition", Variant( maxEdition() ) );
 			config.setParameter("canonical-form",Variant(true)); // flag for output hint?
-
+			if (t.summary)
+			{
+				writeln(t.id);
+			}
 			parseXmlFile(doc, sourceXml, validate);
 		}
+
+
 		catch(XmlError x)
 		{
 			// bombed
-			if (result.errors.length > 0)
+			if (!t.summary)
 			{
-				writefln("DOM Error Handler exception");
-				foreach(s ; result.errors)
-					writeln(s);
+				if (result.errors.length > 0)
+				{
+					writefln("DOM Error Handler exception");
+					foreach(s ; result.errors)
+						writeln(s);
+
+				}
+				else
+				{
+					writefln("General exception %s", x.toString());
+				}
 			}
-			else
-			{
-				writefln("General exception %s", x.toString());
+			else {
+				auto elist = x.errorList();
+				if (elist.length > 0)
+				{
+					foreach(i,s ; elist)
+						writefln("%s: %s", i+1, s);
+				}
 			}
 		}
 
 		catch(Exception ex)
 		{
 			// anything unexpected.
-			writefln("Non parse exception %s", ex.toString());
+			if (!t.summary)
+				writefln("Non parse exception %s", ex.toString());
+			else
+				writeln("General Exception");
 			result.domErrorLevel = DOMError.SEVERITY_FATAL_ERROR;
 			result.hadError = true;
 		}

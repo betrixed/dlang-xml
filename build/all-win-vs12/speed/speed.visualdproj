@@ -209,7 +209,7 @@
     <File path="..\..\..\xml\dom\dtdt.d" />
    </Folder>
    <Folder name="std">
-    <File path="..\..\..\std\xmlSlicer.d" />
+    <File path="..\..\..\xml\std\xmlSlicer.d" />
    </Folder>
    <Folder name="test">
     <File path="..\..\..\xml\test\books.xml" />

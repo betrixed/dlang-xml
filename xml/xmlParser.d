@@ -1928,7 +1928,7 @@ class XmlParser(T)  {
 				test = front;
 			}
 			int 	n = 0;
-			uint	value = 0;
+			ulong	value = 0; // 64 bits, detect 32 bit overflow
 
 			while(test == '0')
 			{
@@ -1954,7 +1954,7 @@ class XmlParser(T)  {
 					popFront();
 					if (empty)
 						throw errors_.makeException(XmlErrorCode.BAD_ENTITY_REFERENCE);
-					if (digits > 10)
+					if (value > 0x10FFFF)
 						throw errors_.makeException(XmlErrorCode.BAD_ENTITY_REFERENCE);
 					test = front;
 				}
@@ -1978,7 +1978,7 @@ class XmlParser(T)  {
 					popFront();
 					if (empty)
 						throw errors_.makeException(XmlErrorCode.BAD_ENTITY_REFERENCE);
-					if (digits > 8)
+					if (value > 0x10FFFF)
 						throw errors_.makeException(XmlErrorCode.BAD_ENTITY_REFERENCE);
 					test =  front;
 				}
@@ -1988,7 +1988,7 @@ class XmlParser(T)  {
 				throw errors_.makeException(XmlErrorCode.BAD_ENTITY_REFERENCE);
 			}
 			popFront();
-			c = value;
+			c = cast(dchar) value;
 			return radix;
 		}
 	}// end private {

@@ -1081,6 +1081,8 @@ public:
     {
         return bom_.key.codeName;
     }
+
+
     /// Setup the correct conversion function for the encoding, check for source BOM compatibility.
     override bool setEncoding(string encoding)
     {
@@ -1487,5 +1489,5 @@ Exception encodingNotFound(uint selector, string name)
 /// Encoding is invalid for BOM.
 Exception encodingInvalid(string bomName, string encName)
 {
-    return new XmlError(text("Encoding ambiguity with byte order mark ",bomName, " encoding ",encName), XmlErrorLevel.INVALID);
+    return new XmlError(text("Encoding ambiguity with byte order mark ",bomName, " encoding ",encName), XmlErrorLevel.FATAL);
 }

@@ -27,16 +27,17 @@ enum string xmlFragment = "fragment";
 /// Return a string for the error code
 
 
-enum XmlResult {
-	TAG_START,
-	TAG_SINGLE, TAG_EMPTY = TAG_SINGLE,
-	TAG_END,
-	TEXT,
-	CDATA,
-	COMMENT,
-	XML_PI,
-	XML_DEC,
-	DOC_END,
+enum SAX {
+	TAG_START, //0
+	TAG_SINGLE, //1
+	TAG_EMPTY = TAG_SINGLE, // 1
+	TAG_END,//2
+	TEXT, //3
+	CDATA, //4
+	COMMENT, //5
+	XML_PI, //6
+	XML_DEC, //7
+	DOC_END,  //8  - is a usefull binary size for an array of delegates
 	DOC_TYPE,	/// DTD parse results contained in doctype as DtdValidate.
 	XI_NOTATION,
 	XI_ENTITY,
@@ -114,7 +115,7 @@ template xmlt(T) {
     alias XmlString[dchar] CharEntityMap;
 	// Its a class so can pass it around as pointer
 	class XmlEvent {
-		XmlResult		eventId;
+		SAX				eventId;
 		XmlString		data;
 		AttributeMap	attributes;
 	}
@@ -173,34 +174,34 @@ template xmlt(T) {
 	interface IXmlDocHandler
 	{
 		void init(ref XmlEvent s); // Allows user to set own XmlEvent class derivative
-		void startTag( XmlEvent s); // tag, followed by attribute pairs
-		void soloTag(XmlEvent s);
-		void endTag(XmlEvent s); // tag
-		void text(XmlEvent s); // text
-		void cdata(XmlEvent s);
-		void comment(XmlEvent s);
-		void instruction(XmlEvent s); // Processing instruction name, content
-		void declaration(XmlEvent s); // declaration attribute name, value
+		void startTag(const XmlEvent s); // tag, followed by attribute pairs
+		void soloTag(const XmlEvent s);
+		void endTag(const XmlEvent s); // tag
+		void text(const XmlEvent s); // text
+		void cdata(const XmlEvent s);
+		void comment(const XmlEvent s);
+		void instruction(const XmlEvent s); // Processing instruction name, content
+		void declaration(const XmlEvent s); // declaration attribute name, value
 
 		void startDoctype(Object parser);		// notify of Dtd processing start
 		void endDoctype(Object parser);		// notify of Dtd completed
 		void notation(Object n);				// Notation entity data reference
 		/// currently up to StdEventSize , ie XmlDeclaration last eventId
 		/// just return the entity name, not decoded
-		void entityName(const(T)[] s,bool inAttribute);
+		
 		void setErrorHandler(IXmlErrorHandler eh);
 	}
 
 	class NullDocHandler :  IXmlDocHandler {
 		void init(ref XmlEvent s){} // Allows user to set own XmlEvent class derivative
-		void startTag( XmlEvent s){} // tag, followed by attribute pairs
-		void soloTag(XmlEvent s){}
-		void endTag(XmlEvent s){} // tag
-		void text(XmlEvent s){} // text
-		void cdata(XmlEvent s){}
-		void comment(XmlEvent s){}
-		void instruction(XmlEvent s){} // Processing instruction name, content
-		void declaration(XmlEvent s){} // declaration attribute name, value
+		void startTag( const XmlEvent s){} // tag, followed by attribute pairs
+		void soloTag(const XmlEvent s){}
+		void endTag(const XmlEvent s){} // tag
+		void text(const XmlEvent s){} // text
+		void cdata(const XmlEvent s){}
+		void comment(const XmlEvent s){}
+		void instruction(const XmlEvent s){} // Processing instruction name, content
+		void declaration(const XmlEvent s){} // declaration attribute name, value
 
 		void startDoctype(Object parser){}		// notify of Dtd processing start
 		void endDoctype(Object parser){}		// notify of Dtd completed

@@ -1,5 +1,7 @@
 module xml.dom.dtdt;
-
+/**
+These data structures are seperate from other parts of regular DOM
+*/
 import xml.xmlError;
 import xml.txml;
 import std.stdint, std.conv, std.array;

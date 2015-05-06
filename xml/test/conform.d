@@ -151,6 +151,8 @@ int main(string[] args)
 	{
 		result = TestType!(wchar)(args);
 	}
+	writefln("Result is %s",result);
+	getchar();
 	return result;
 
 

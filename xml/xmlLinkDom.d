@@ -234,14 +234,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			throw errorReport;
 	}
 
-	/// just return the entity name, not decoded
-	void entityName(const(T)[] s,bool inAttribute)
-	{
-
-	}
-
 	void setEncoding(const(T)[] codeName)
 	{
+		// this should be done on document print out, or by parser on document.
 	}
 
 
@@ -639,7 +634,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         }
         checkErrorStatus();
     }
-	void makeTag(ref XmlEvent s, bool hasContent)
+	void makeTag(ref const XmlEvent s, bool hasContent)
 	{
 		XmlString		tagName = s.data;
 
@@ -747,26 +742,26 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	{
 		s = new XmlEvent();
 	}
-	void soloTag(XmlEvent s)
+	void soloTag(const XmlEvent  s)
 	{
 		makeTag(s,false);
 	}
 
-	void startTag(XmlEvent s)
+	void startTag(const XmlEvent s)
 	{
 		makeTag(s,true);
 	}
 
-	void text(XmlEvent s)
+	void text(const XmlEvent  s)
 	{
 		level_.n_.appendChild(new Text(s.data));
 	}
-	void comment(XmlEvent s)
+	void comment(const XmlEvent  s)
 	{
 	// comments may be attached at document level
 		level_.n_.appendChild(doc_.createComment(s.data));
 	}
-	void cdata(XmlEvent s)
+	void cdata(const XmlEvent  s)
 	{
 		version(TagNesting)
 			auto edef = cast(ElementDef) level_.nest_.info_;
@@ -778,20 +773,20 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			: doc_.createCDATASection(s.data);
 		level_.n_.appendChild(n);
 	}
-	final void declaration(XmlEvent s)
+	final void declaration(const XmlEvent  s)
 	{
 		// use the attributes, or 
 		auto docVersion = s.attributes.get("version","1.0");
 		doc_.setXmlVersion(docVersion);
 	}
 
-	final void instruction(XmlEvent s)
+	final void instruction(const XmlEvent  s)
 	{
 		auto p = s.attributes[0];
 		level_.n_.appendChild(doc_.createProcessingInstruction(p.name, p.value));
 	}
 
-	final void endTag(XmlEvent s)
+	final void endTag(const XmlEvent  s)
 	{
 		if (s.data != level_.tag_)
 		{
@@ -1539,7 +1534,7 @@ void parseXml(T,S)(XMLDOM!T.Document doc, immutable(S)[] sxml, bool validate = t
 	scope(exit)
         builder.explode();
     builder.validate(validate);
-	builder.parseNoSlice!S(doc, sxml);
+	builder.parseNoSlice!S(doc, sxml); 
 }
 void parseXmlSlice(T)(XMLDOM!T.Document doc, immutable(T)[] sxml, bool validate = true)
 {

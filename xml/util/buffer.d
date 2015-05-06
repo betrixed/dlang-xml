@@ -1128,7 +1128,16 @@ struct Buffer(T)
 			assign(tempPtr, tempLength);
 		}
 	}
-
+	/** This leads to GC collect exceptions, so clean up elsewhere
+	~this()
+	{
+		if (ptr_)
+		{
+			shrinkTo(0);
+			freeCapacity(ptr_,true);
+		}
+	}
+	*/
 
 	T* ptr_;
 	uintptr_t	length_;

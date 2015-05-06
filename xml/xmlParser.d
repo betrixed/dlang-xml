@@ -963,7 +963,7 @@ class XmlParser(T)  {
 				//XmlEvent!T	results_;
 			with (results_)
 			{
-				eventId = XmlResult.XML_PI;
+				eventId = SAX.XML_PI;
 				data = target;
 				attributes = Attribute(target,bufContent_.data.idup);
 			}
@@ -1155,7 +1155,7 @@ class XmlParser(T)  {
 			parseComment();
 			with(results_)
 			{
-				eventId = XmlResult.COMMENT;
+				eventId = SAX.COMMENT;
 				if (slicing_ && !deviantData_)
 					data = marker_[];
 				else
@@ -1327,7 +1327,7 @@ class XmlParser(T)  {
 			// send event
 			with(results_)
 			{
-				eventId = XmlResult.XML_DEC;
+				eventId = SAX.XML_DEC;
 				data = "xml";
 				attributes = attributes_;
 			}
@@ -1417,7 +1417,7 @@ class XmlParser(T)  {
 				itemCount++;
 				with(results_)
 				{
-					eventId = XmlResult.TAG_END;
+					eventId = SAX.TAG_END;
 					data = tag_;
 					attributes.reset();
 				}
@@ -1435,7 +1435,7 @@ class XmlParser(T)  {
 			attributes_.reset();
 
 			//auto prepareAttributes = (evt_.nameEvent.startTagDg_ !is null) || (evt_.nameEvent.soloTagDg_ !is null);
-			void setResults(XmlResult id)
+			void setResults(SAX id)
 			{
 				with(results_)
 				{
@@ -1446,7 +1446,7 @@ class XmlParser(T)  {
 
 				if (eventMode_)
 				{
-					if (id == XmlResult.TAG_START)
+					if (id == SAX.TAG_START)
 						events_.startTag(results_);
 					else
 						events_.soloTag(results_);
@@ -1469,7 +1469,7 @@ class XmlParser(T)  {
 						{
 							// delayed popFront,
 							// processing as startTag
-							setResults(XmlResult.TAG_START);
+							setResults(SAX.TAG_START);
 							popFront();
 							return;
 						}
@@ -1504,7 +1504,7 @@ class XmlParser(T)  {
 								markupDepth--;
 								elementDepth--; // cancel earlier increment
 								popFront();
-								setResults(XmlResult.TAG_EMPTY);
+								setResults(SAX.TAG_EMPTY);
 								checkEndElement();
 								itemCount++;
 								return;
@@ -1513,12 +1513,12 @@ class XmlParser(T)  {
 							{
 								markupDepth--;
 								unpop('<');
-								setResults(XmlResult.TAG_START);
+								setResults(SAX.TAG_START);
 							}
 							return;
 						}
 						itemCount++;
-						setResults(XmlResult.TAG_START);
+						setResults(SAX.TAG_START);
 						return;
 					case '/':
 						popFront();
@@ -1530,7 +1530,7 @@ class XmlParser(T)  {
 						elementDepth--;
 						frontFilterOn();
 						popFront();
-						setResults(XmlResult.TAG_EMPTY);
+						setResults(SAX.TAG_EMPTY);
 						checkEndElement();
 						itemCount++;
 						return;
@@ -1592,7 +1592,7 @@ class XmlParser(T)  {
 			itemCount++;
 			with(results_)
 			{
-				eventId = XmlResult.TEXT;
+				eventId = SAX.TEXT;
 				if (slicing_ && !deviantData_)
 				{
 					marker_.end(sliceData_.ptr, mpos);
@@ -1610,6 +1610,11 @@ class XmlParser(T)  {
 			inCharData = false;
 			deviantData_ = false;
 			return;
+		}
+		
+		string unknownEntityMsg(const(T)[] ename)
+		{
+			return format("Unknown Entity %s",ename);
 		}
 
 		final void doContent()
@@ -1718,16 +1723,11 @@ class XmlParser(T)  {
 									entityStack_.put(tag_); // store for next call
 									returnTextContent(); // return content so far
 								}
-								else {
-									// entity Name event
-									if (eventMode_)
-										events_.entityName(tag_,false);
-								}
-								if (eventMode_)
-									continue;
+								//TODO? make a user supplied entity find mechanic?
+								if (dtd_ !is null && dtd_.paramEntityMap.length > 0) // Test 2180
+									errors_.pushError(unknownEntityMsg(tag_),XmlErrorLevel.INVALID);
 								else
-									return;
-
+									throw errors_.makeException(unknownEntityMsg(tag_));
 							}
 							continue;
 						}
@@ -1816,7 +1816,7 @@ class XmlParser(T)  {
 			}
 			with (results_)
 			{
-				eventId = XmlResult.DOC_END;
+				eventId = SAX.DOC_END;
 				data = null;
 				attributes.reset();
 			}
@@ -1861,7 +1861,7 @@ class XmlParser(T)  {
 					itemCount++;
 					with(results_)
 					{
-						eventId = XmlResult.CDATA;
+						eventId = SAX.CDATA;
 						if (slicing_ && !deviantData_)
 						{
 							data = marker_[];
@@ -2367,9 +2367,8 @@ class XmlParser(T)  {
 
     Exception makeUnknownEntity(const(T)[] dname)
     {
-        string s = format("Unknown entity %s", dname);
+        auto s = unknownEntityMsg(dname);
         auto level = inParamEntity()  ? XmlErrorLevel.ERROR : XmlErrorLevel.FATAL;
-
         return errors_.makeException(s,level);
     }
 

@@ -158,8 +158,6 @@ void dxmlSliceThroughPut(T,S)(immutable(S)[] xml)
 	dummy.parseSlice(xml);
 }
 
-
-
 auto dxmlMakeDoc(T,S)(immutable(S)[] s)
 {
 	alias xml.dom.domt.XMLDOM!T	xmldom;

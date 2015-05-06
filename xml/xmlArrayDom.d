@@ -9,8 +9,9 @@ module xml.xmlArrayDom;
 
 
 import xml.util.buffer;
-import xmlout = xml.xmlOutput;
 import xml.txml;
+import xml.textInput;
+import xml.dom.dtdt;
 
 import std.string, std.conv, std.exception, std.stream;
 import std.variant;
@@ -27,9 +28,12 @@ debug(VERBOSE)
 /// Dom is like std.xml 
 /// Elements, Attributes, nodes, have no parent or owner member.
 
+import xml.xmlOutput;
+import xml.xmlParser;
+
 template XMLArrayDom(T) {
 
-	alias xout = xmlout.XMLOutput!T;
+	alias xout = xml.xmlOutput.XMLOutput!T;
 
 	alias xout.makeXmlComment makeXmlComment;
 	alias xout.makeXmlCDATA makeXmlCDATA;
@@ -44,6 +48,15 @@ template XMLArrayDom(T) {
 	alias xout.XmlEvent		XmlReturn;
 	alias Buffer!Item		ItemList;
 
+	alias xml.txml.xmlt!T       xmli;
+	alias xmli.NullDocHandler   NullDocHandler;
+	alias xmli.IXmlErrorHandler IXmlErrorHandler;
+	alias xmli.IXmlDocHandler IXmlDocHandler;
+	alias xmli.XmlEvent  XmlEvent;
+	alias xmli.XmlErrorImpl  XmlErrorImpl;
+
+	alias xml.dom.dtdt.XMLDTD!T dtdi;
+	alias dtdi.DocTypeData DocTypeData;
 
 	abstract class Item
 	{
@@ -535,11 +548,165 @@ void printElement(Element e, ref XmlPrinter tp)
 
 
 /// Element from TAG_START or TAG_EMPTY
-Element createElement(ref XmlReturn ret)
+Element createElement(const XmlReturn ret)
 {
     Element e = new Element(ret.data);
 	e.attr = ret.attributes;
     return e;
+}
+
+/// collector callback class
+class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
+{
+    Buffer!Element		elemStack_;
+    Element			    root_;
+    Element				parent_;
+	XmlParser!T			parser_;
+	XmlEvent			event_;
+	DocTypeData			doctype_;
+
+    this()
+    {
+		parser_ = new XmlParser!T();
+		parser_.docInterface = this;
+		parser_.errorInterface = this;
+    }
+    @property {
+        Document document() {
+            return cast(Document) root_;
+        }
+        void document(Document d) {
+            root_ = d;
+            parent_ = d;
+        }
+    }
+
+	Element root() @property
+	{
+		return root_;
+	}
+
+	override void init(ref XmlEvent s)
+	{
+		event_ = new XmlEvent;
+		s = event_;
+	}
+	
+	// like 
+    override void startDoctype(Object parser)
+	{
+		doctype_ = parser_.DTD(); // get DocTypeData from parser
+	}
+    override void endDoctype(Object parser)
+	{
+	}
+	
+	override void notation(Object n)
+	{
+	}
+	void setErrorHandler(IXmlErrorHandler eh)
+	{
+	}
+    override void startTag(const XmlEvent ret)
+    {
+        auto e = createElement(ret);
+		if (parent_ is null)
+		{
+			root_ = e;
+			parent_ = e;
+		}
+		else {
+			elemStack_.put(parent_);
+			parent_.appendChild(e);
+			parent_ = e;
+		}
+    }
+    override void soloTag(const XmlEvent ret)
+    {
+        parent_ ~= createElement(ret);
+    }
+
+    override void endTag(const XmlEvent ret)
+    {
+		if (elemStack_.length > 0)
+		{
+			parent_ = elemStack_.movePopBack();
+		}
+        else {
+			parent_ = null;
+		}
+    }
+    override void text(const XmlEvent ret)
+    {
+        parent_.addText(ret.data);
+    }
+    override void cdata(const XmlEvent ret)
+    {
+        parent_.addCDATA(ret.data);
+    }
+    override void comment(const XmlEvent ret)
+    {
+        parent_.addComment(ret.data);
+    }
+    override void instruction(const XmlEvent ret)
+    {
+		auto p = ret.attributes[0];
+		parent_.appendChild(new ProcessingInstruction(p.name, p.value));
+    }
+    override void declaration(const XmlEvent ret)
+    {
+		root_.attr = ret.attributes;
+    }
+	void explode()
+	{
+		destroy(this);
+	}
+
+	@property void normalizeAttributes(bool value)
+	{
+	    parser_.setParameter(xmlAttributeNormalize,Variant(value));
+	}
+	void setSource(S)(const(S)[] src)
+	{
+		parser_.fillSource(new SliceFill!S(src));
+	}
+
+	void setFile(string filename)
+	{
+        auto s = new BufferedFile(filename);
+		parser_.fillSource = new XmlStreamFiller(s);
+	}
+    //
+	void setFileSlice(string filename)
+	{
+		parser_.sliceFile(filename);
+	}
+
+	void setSourceSlice(immutable(T)[] data)
+	{
+		parser_.initSource(data);
+	}
+
+	void parseDocument()
+	{
+	    if (root_ is null)
+        {
+            document = new Document();
+        }
+		parser_.parseAll();
+	}
+
+}
+
+
+void parseArrayDom(S)(Document doc, immutable(S)[] sxml)
+{
+    auto builder = new ArrayDomBuilder();
+    scope(exit)
+        builder.explode();
+    builder.document = doc;
+    builder.setSource!S(sxml);
+    builder.parseDocument();
 }
 
 } // XMLArrayDom

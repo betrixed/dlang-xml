@@ -24,11 +24,17 @@ debug(VERBOSE)
 {
 	import std.stdio;
 }
-class XmlDelegate(T) {
 
-	alias XmlEvent!T	XmlReturn;
+template XMLSAX(T) {
+	alias xml.txml.xmlt!T	vtpl;
+	alias vtpl.IXmlDocHandler IXmlDocHandler;
+	alias vtpl.IXmlErrorHandler IXmlErrorHandler;
+	alias vtpl.XmlEvent		    XmlEvent;
 
-	alias void delegate(XmlReturn s) ParseDg;
+	class XmlDelegate(T) {
+   
+
+	alias void delegate(XmlEvent s) ParseDg;
 
 	version (GC_STATS)
 	{
@@ -43,7 +49,7 @@ class XmlDelegate(T) {
 	immutable(T)[]					tagkey_;	 // key for tag name, and parent tag of assorted child types
 	ParseDg[XmlResult.DOC_END]		callbacks_;  // common Xml events, expensive sized array
 
-	void setInterface(IXmlDocHandler!T i)
+	void setInterface(IXmlDocHandler i)
 	{
 		callbacks_[XmlResult.TAG_START] = &i.startTag;
 		callbacks_[XmlResult.TAG_EMPTY] = &i.soloTag;
@@ -84,23 +90,23 @@ version (GC_STATS)
 		gcStatsSum.dec();
 	}
 }
-	void opIndexAssign(ParseDg dg, XmlResult rtype)
+	void opIndexAssign(ParseDg dg, XmlEvent rtype)
 	in {
-		assert(rtype < XmlResult.DOC_END);
+		assert(rtype < XmlEvent.DOC_END);
 	}
 	body {
 		callbacks_[rtype] = dg;
 	}
 
-	ParseDg opIndex(XmlResult rtype)
+	ParseDg opIndex(XmlEvent rtype)
 	in {
-		assert(rtype < XmlResult.DOC_END);
+		assert(rtype < XmlEvent.DOC_END);
 	}
 	body {
 		return callbacks_[rtype];
 	}
 
-	bool didCall(ref XmlReturn s)
+	bool didCall(ref XmlEvent s)
 	in {
 		assert(s.eventId < XmlResult.DOC_END);
 	}
@@ -123,20 +129,23 @@ Yet another version of callbacks for XML.
 auto tv = new TagVisitor(xmlParser);
 
 auto mytag = new TagBlock("mytag");
-mytag[XmlResult.TAG_START] = (ref XmlReturn ret){
+mytag[XmlEvent.TAG_START] = (ref XmlReturn ret){
 
 };
-mytag[XmlResult.TAG_SINGLEs] = (ref XmlReturn ret){
+mytag[XmlEvent.TAG_SINGLEs] = (ref XmlReturn ret){
 
 };
 ---
 
 */
 
-class TagVisitor(T) : XmlErrorImpl!T {
+class TagVisitor(T) : xml.txml.xmlt!T.IXmlErrorHandler {
 	// Ensure Tag name, and current associated TagBlock are easily obtained after TAG_END.
 	alias XmlDelegate!T TagBlock;
 	alias XmlDelegate!T.ParseDg	ParseDg;
+	alias xml.xmlParser.XmlParser!T XmlParser;
+	alias xml.txml.xmlt!T.XmlEvent   XmlEvent;
+
 	alias immutable(T)[] XmlString;
 	alias TagBlock[XmlString]	Namespace;
 
@@ -146,7 +155,7 @@ class TagVisitor(T) : XmlErrorImpl!T {
 		string					tagName;
 		TagBlock				handlers_;
 	};
-	DXmlParser!T				parser_;
+	XmlParser			parser_;
 
 	Buffer!ParseLevel			parseStack_;
 	Buffer!Namespace			nsStack_;
@@ -159,7 +168,7 @@ class TagVisitor(T) : XmlErrorImpl!T {
 	bool						handlersChanged_;  // flag to recheck stack TagBlock
 public:
 	TagBlock					defaults;
-	XmlEvent!T					tag;
+	XmlResult    				tag;
 	Namespace					namespace;
 
 	/// Experimental and dangerous for garbage collection. No other references must exist.
@@ -183,7 +192,7 @@ public:
 	/// convenience for single delegate assignments for a tag string
 	/// Not that null tag will not be called, only real tag names are looked up.
 	/// Delegate callbacks can be set to null
-	void opIndexAssign(ParseDg dg, XmlString tag, XmlResult rtype)
+	void opIndexAssign(ParseDg dg, XmlString tag, XmlEvent rtype)
 	{
 		auto tb = namespace.get(tag,null);
 		if (tb is null)
@@ -194,7 +203,7 @@ public:
 		tb[rtype] = dg;
 	}
 	/// return value of a named callback
-	ParseDg opIndex(XmlString tag, XmlResult rtype)
+	ParseDg opIndex(XmlString tag, XmlEvent rtype)
 	{
 		auto tb = namespace.get(tag, null);
 		if (tb !is null)
@@ -301,7 +310,7 @@ public:
 
 			switch(tag.type)
 			{
-				case XmlResult.TAG_START:
+				case XmlEvent.TAG_START:
 					// a new tag.
 					parseStack_.put(current_);
 					current_.tagName = tag.scratch;
@@ -309,7 +318,7 @@ public:
 					if (current_.handlers_ !is null)
 						called_ = current_.handlers_.didCall(tag);
 					break;
-				case XmlResult.TAG_SINGLE:
+				case XmlEvent.TAG_SINGLE:
 					// no push required, but check after
 					auto tb = namespace.get(tag.scratch,null);
 					if (tb !is null)
@@ -317,7 +326,7 @@ public:
 						called_ = tb.didCall(tag);
 					}
 					break;
-				case XmlResult.TAG_END:
+				case XmlEvent.TAG_END:
 					debug(VERBOSE) writeln("end " , tag.name, " depth ", parser_.tagDepth(), " ~ ", startLevel);
 					if (current_.handlers_ !is null)
 						called_ = current_.handlers_.didCall(tag);
@@ -329,12 +338,12 @@ public:
 						return; // loopbreaker
 					break;
 				default:
-					if (tag.type < XmlResult.DOC_END)
+					if (tag.type < XmlEvent.DOC_END)
 					{
 						if (current_.handlers_ !is null)
 							called_ = current_.handlers_.didCall(tag);
 					}
-					else if (tag.type == XmlResult.DOC_END) {
+					else if (tag.type == XmlEvent.DOC_END) {
 						return;
 					}
 					break;
@@ -360,7 +369,7 @@ public:
 /// This was to get over the design issue, that the document level is skipped in std.xml
 /// Alternatives - use parse.dombuild, util.visit,
 
-import arraydom = xml.dom.arrayt;
+import arraydom = xml.xmlArrayDom;
 
 class XmlHandler(T) : XmlErrorImpl!T
 {
@@ -483,7 +492,7 @@ public:
 			called_ = false;
 			switch(tag.type)
 			{
-				case XmlResult.TAG_START:
+				case XmlEvent.TAG_START:
 					// a new tag.
 					if (onStartTag !is null)
 					{
@@ -507,7 +516,7 @@ public:
 					}
 					elemStack_.put(parent); // null or not
 					break;
-				case XmlResult.TAG_SINGLE:
+				case XmlEvent.TAG_SINGLE:
 					// no push required, but check after
 					auto parent = (elemStack_.length > 0) ? elemStack_.back() : null;
 					if (parent !is null)
@@ -537,7 +546,7 @@ public:
 						}
 					}
 					break;
-				case XmlResult.TAG_END:
+				case XmlEvent.TAG_END:
 					if (onEndTag !is null)
 					{
 						auto p = onEndTag.get(tag.name,null);
@@ -553,7 +562,7 @@ public:
 						return;
 
 					break;
-				case XmlResult.TEXT:
+				case XmlEvent.TEXT:
 					auto parent = (elemStack_.length > 0) ? elemStack_.back() : null;
 					if (parent !is null)
 						parent.addText(tag.data);

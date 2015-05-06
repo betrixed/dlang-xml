@@ -13,8 +13,46 @@ The xmlSlicer is mainly used as performance comparison.
 
 Progress
 --------
-As this is big refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is nearly complete. 3 testcases need fixing.
+As this is big refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is complete.
 
+Parser
+------
+The parser and dom are a template of one of the 3 D language character sizes, char, wchar or dchar. Each of these instances can read any kind of xml encoded document file with any kind of BOM mark at the beginning, if this is a valid document and encoding combination. Most often the usage might be of two sorts.  There is either a document to be parsed from the file system, or from a string obtained by some means. If it is already a string there is a possibility of not allocating as much memory if document or information extracted is to be of the same encoding and character size. The D language leads its self open to the possibility of slicing the existing buffer, and returning segments of the origin document as immutable arrays. There are surely some trade-offs. The module xmlLinkDom provides 4 templated functions to parse the document.
+
+import std.variant;
+import xml.xmlLinkDom;
+
+First pick the character type for the DOM document.
+
+auto mydoc = new XMLDOM!(char).Document;
+// .. set any expectations of document
+DOMConfiguration config = doc.getDomConfig();
+// .. if namespaces, the DOM is built from ElementNS and AttrNS, and not plain Element and Attribute types
+// .. this means there are memory and performance savings if namespace processing is not required. 
+// .. namespaces are false by default
+config.setParameter("namespace-declarations",Variant(true));
+
+Pick a source with corresponding character type.
+
+try {
+    if (filesystem)
+    {
+      // file may be of any encoding, endian and character type
+      parseXmlFile!(char)( mydoc, filePath, true); 
+    }
+    else {
+    // Must specifify character type of myArray (CT)
+      parseXml!(char, CT) ( mydoc, myArray, true);
+      // alternative to mostly slice up original array if same document character type ..
+      // auto mydoc = new XMLDOM!(wchar).Document;
+      // parseXmlSlice(wchar)( mydoc, myArray, true)
+    }
+}
+catch(XmlError xe)
+{
+  // .. check for errors
+}
+// .. do stuff with the document
 
 
 ### Console applications

@@ -13,7 +13,7 @@ The xmlSlicer is mainly used as performance comparison.
 
 Progress
 --------
-As this is big refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is complete.
+With a refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is complete.
 
 Parser
 ------
@@ -75,5 +75,62 @@ Speed - Comparison of the xml.std.xmlSlicer and xml.xmlParser execution times av
 BigLoad - Comparison test of GC non-collection issues by object instance counting, for a big XML document. With some creative destruction, everything gets a full cleanup.
 
 
+SAX Interface
+_____________
+For selective extraction of XML information on the fly.
+```
+/// worn example
+    Book[]  books;
+	Book	book;
+	
+	auto mainNamespace = new TagSpace(); 
+	auto bookNamespace = new TagSpace();
+	auto visitor = new SaxParser();	
+	visitor.namespace = mainNamespace;
 
-Contact : michael.rynn.500@gmail.com
+	scope(exit)
+	{
+		destroy(visitor);
+		destroy(mainNamespace);
+		destroy(bookNamespace);
+	}
+
+	mainNamespace["book",SAX.TAG_START] = (const SaxEvent xml) {
+		book.id = xml.attributes.get("id");
+		visitor.namespace = bookNamespace;
+	};
+
+	mainNamespace["book",SAX.TAG_END]  = (const SaxEvent xml) {
+		books ~= book;
+		visitor.namespace = mainNamespace;
+	};
+
+	/// single delegate assignment for tag
+	bookNamespace["author", SAX.TEXT] = (const SaxEvent xml) {
+		book.author = xml.data;
+	};
+	bookNamespace["title", SAX.TEXT] = (const SaxEvent xml) {
+		book.title = xml.data;
+	};
+	bookNamespace["genre", SAX.TEXT] = (const SaxEvent xml) {
+		book.genre = xml.data;
+	};
+	bookNamespace["price",SAX.TEXT] = (const SaxEvent xml)
+	{
+		book.price = xml.data;
+	};
+	bookNamespace["publish_date",SAX.TEXT] = (const SaxEvent xml)
+	{
+		book.pubDate = xml.data;
+	};
+	bookNamespace["description",SAX.TEXT] = (const SaxEvent xml)
+	{
+		book.description = xml.data;
+	};
+
+	visitor.setupNormalize(s);
+	visitor.parseDocument();
+	
+```
+
+

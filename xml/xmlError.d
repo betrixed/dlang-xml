@@ -9,13 +9,32 @@ enum XmlErrorLevel {
 	FATAL = 3
 }
 
+version(GC_STATS)
+{
+	import xml.util.gcstats;
 
+}
 class XmlError : Exception {
 	XmlErrorLevel	level_;
 	string[]		errorList_;
+	version(GC_STATS)
+	{
+		mixin GC_statistics;
+		static this()
+		{
+			setStatsId(typeid(typeof(this)).toString());
+		}
+	}
+	~this()
+	{
+		version(GC_STATS)
+			gcStatsSum.dec();
+	}
 
 	this(string msg, XmlErrorLevel level = XmlErrorLevel.FATAL)
 	{
+		version(GC_STATS)
+			gcStatsSum.inc();
 		level_ = level;
 		super(msg);
 	}

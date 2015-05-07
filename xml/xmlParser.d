@@ -150,9 +150,13 @@ class XmlParser(T)  {
     }
 	void explode()
 	{
-	    fillSource_ = null;
-	    events_ = null;
-	    errors_ = null;
+		if (dtd_ !is null)
+		{
+			dtd_.explode();
+			dtd_ = null;
+		}
+		contextStack_.length = 0;
+		destroy(this);
 	}
 
 
@@ -661,7 +665,7 @@ class XmlParser(T)  {
 
 		StringType[StringType]	charEntity;
 		XmlContext[]     	contextStack_;
-		XmlString[]         entityStack_;
+		
 
 		DocTypeData			dtd_;
 		intptr_t			itemCount;
@@ -1380,7 +1384,6 @@ class XmlParser(T)  {
 					case XmlErrorLevel.FATAL:
 					default:
 						errors_.pushError(ex.toString(),XmlErrorLevel.FATAL);
-
 				}
 			}
 			catch(Exception ex)
@@ -1720,7 +1723,6 @@ class XmlParser(T)  {
 								/// This requires an event stack, if call model is to be kept
 								if (inCharData)
 								{
-									entityStack_.put(tag_); // store for next call
 									returnTextContent(); // return content so far
 								}
 								//TODO? make a user supplied entity find mechanic?
@@ -3362,6 +3364,7 @@ class XmlParser(T)  {
 		{
 			int spacect1 = munchSpace(); // after keyword
 			dchar test;
+			EntityData toDestroy; // if not wanted
 
 			bool isPE = matchInput('%');
 			int spacect2 = munchSpace();
@@ -3406,10 +3409,17 @@ class XmlParser(T)  {
 			{
 				// Done this one before. Parse, but do not overwrite the first encountered version.
 				edef = new EntityData(ename, etype);
+				toDestroy = edef;
 				// created, check, but afterwards forget it.
 				// TODO: report with warning ?
 			}
-
+			scope(exit)
+			{
+				if (toDestroy !is null)
+				{
+					destroy(toDestroy);
+				}
+			}
 			ExternalID extID;
 
 			if (getExternalUri(extID))
@@ -4289,6 +4299,12 @@ class XmlParser(T)  {
 		auto sf = new XmlStreamFiller(s);
 		ulong	pos;
 
+		scope(exit)
+		{
+			destroy(ep);
+			destroy(s);
+			destroy(sf);
+		}
 		bool getData(ref const(dchar)[] data)
 		{
 			return sf.fillData(data,pos);
@@ -4360,6 +4376,13 @@ class XmlParser(T)  {
 		auto sf = new XmlStreamFiller(s);
 		ulong	pos;
 
+		scope(exit)
+		{
+			ep.explode();
+			destroy(ep);
+			destroy(s);
+			destroy(sf);
+		}
 		bool getData(ref const(dchar)[] data)
 		{
 			return sf.fillData(data,pos);

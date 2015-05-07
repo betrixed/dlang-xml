@@ -8,9 +8,9 @@ import std.stdint;
 import std.algorithm;
 import xml.util.buffer;
 /// return index into original range
-alias Tuple!(bool,"found",intptr_t,"index") BinaryResult;
+alias Tuple!(bool,"found",intptr_t,"index") SearchResult;
 
-/// XML type attributes represented as ordered array
+/// XML attributes represented as array of pairs
 template XMLAttribute(T)
 {
 	alias immutable(T)[] XmlString;
@@ -22,6 +22,17 @@ template XMLAttribute(T)
 
 		bool opEquals()(auto ref const XmlAttribute s) const { 
 			return (this.name == s.name);
+		}
+		int opCmp(ref const XmlString id) const {
+			if (name.length == 0)
+			{
+				return (id.length > 0) ? 1 : 0;
+			}
+			if (id.length == 0)
+			{
+				return (name.length > 0) ? -1 : 0;
+			}
+			return typeid(XmlString).compare(&name, &id);
 		}
 		int opCmp(ref const XmlAttribute s) const {
 			if (name.length == 0)
@@ -40,7 +51,7 @@ template XMLAttribute(T)
 		alias XmlAttribute[] AttributeBuffer;
 		AttributeBuffer	attr_;
 
-		bool			needSort_;
+		bool needSort_;
 		
 		this(const XmlAttribute[] src, bool needSort = false)
 		{
@@ -65,36 +76,42 @@ template XMLAttribute(T)
 			attr_ = [attrb];
 			needSort_ = false;
 		}
-		
-
-
-
-
-		BinaryResult binarySearch(ref XmlAttribute value) const
+	
+		SearchResult find(XmlString id) const
 		{
 			intptr_t e = attr_.length;
-			if (e > 1)
-			{	
-				if (needSort_)
-					sort();
+			if (!needSort_ && e > 1)
+				return binarySearch(id);
+			else
+				return lineSearch(id);
+		}
+		SearchResult lineSearch(ref XmlString id) const
+		{
+			intptr_t e = attr_.length;
+			for(intptr_t i = 0 ; i < e; i++)
+			{
+				if (attr_[i].opCmp(id)==0)
+					return SearchResult(true,i);
 			}
-			else // this is obviously a cheat and not thread safe
-				(cast(AttributeMap*)(&this)).needSort_ = false;
-
+			return SearchResult(false,-1);
+		}
+		/// Check if sorted before calling this
+		SearchResult binarySearch(ref XmlString id) const
+		{
+			intptr_t e = attr_.length;
 			intptr_t s = 0;
-			
 			intptr_t i = 0;
 			while (s < e) {
 				i =  (e + s) / 2;
-				auto cmp = attr_[i].opCmp(value);
+				auto cmp = attr_[i].opCmp(id);
 				if (cmp > 0) 
 					e = i;
 				else if (cmp < 0) 
 					s = i+1;
 				else 
-					return BinaryResult(true,i);
+					return SearchResult(true,i);
 			}
-			return BinaryResult(false,i);
+			return SearchResult(false,i);
 		}
 
 		const(XmlAttribute)[] peek() const 
@@ -124,18 +141,20 @@ template XMLAttribute(T)
 		@property uintptr_t length() const { return attr_.length; }
 		@property bool sorted() const { return !needSort_; }
 
-		void sort() const
+		void sort() 
 		{
-			// this is obviously a cheat and not thread safe
-			static if (isDynamicArray!(AttributeBuffer))
+			if (attr_.length > 1)
 			{
-				std.algorithm.sort(cast(XmlAttribute[]) attr_);
+				static if (isDynamicArray!(AttributeBuffer))
+				{
+					std.algorithm.sort(attr_);
+				}
+				else {
+					XmlAttribute[] temp = (attr_.ptr_)[0..attr_.length_];
+					std.algorithm.sort(temp);
+				}
 			}
-			else {
-				XmlAttribute[] temp = (attr_.ptr_)[0..attr_.length_];
-				std.algorithm.sort(temp);
-			}
-			(cast(AttributeMap*)(&this)).needSort_ = false;
+			needSort_ = false;
 		}
 
 		void pack(uintptr_t pos = 0)
@@ -154,11 +173,11 @@ template XMLAttribute(T)
 		void removeName(XmlString name)
 		{
 			auto attrb = XmlAttribute(name,[]);
-			auto ix = binarySearch(attrb);
+			auto ix = find(name);
 			if (ix.found)
 			{   // replace the element with nothing
 				attr_[ix.index] = XmlAttribute.init;
-				pack();
+				pack(ix.index);
 				
 			}
 		}
@@ -179,11 +198,11 @@ template XMLAttribute(T)
 				attr_ ~= attrb;
 			}
 			else {
-				auto ix = binarySearch(attrb);
-				if (ix.found)
+				auto result = find(attrb.name);
+				if (result.found)
 				{
 					// replace
-					attr_[ix.index] = attrb;
+					attr_[result.index] = attrb;
 				}
 				else {
 					// insert by push
@@ -206,14 +225,12 @@ template XMLAttribute(T)
 		
 		XmlString get( XmlString key, XmlString elseValue = []) const
 		{
-			auto attrb = XmlAttribute(key,"");
-			auto ix = binarySearch(attrb);
+			auto ix = find(key);
 			return (ix.found ? attr_[ix.index].value : elseValue);
 		}
-		XmlString* opIn_r(ref XmlString key) 
+		XmlString* opIn_r(XmlString key) 
 		{
-			auto attrb = XmlAttribute(key,[]);
-			auto ix = binarySearch(attrb);
+			auto ix = find(key);
 			return (ix.found ? &attr_[ix.index].value : null);
 		}
 

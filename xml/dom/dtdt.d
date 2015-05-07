@@ -8,6 +8,9 @@ import std.stdint, std.conv, std.array;
 import std.ascii;
 import std.string;
 
+version(GC_STATS)
+	import xml.util.gcstats;
+
 enum ChildSelect
 {
 	sl_one,
@@ -71,12 +74,28 @@ template XMLDTD(T)
 		//Notation		ndata_;         // if we are a notation, here is whatever it is
 		string			baseDir_;		// if was found, where was it?
 		EntityData		context_;		// if the entity was declared in another entity
+		version(GC_STATS)
+		{
+			mixin GC_statistics;
+			static this()
+			{
+				setStatsId(typeid(typeof(this)).toString());
+			}
+		}
 
+		~this()
+		{
+			version(GC_STATS)
+				gcStatsSum.dec();
+
+		}
 		this(XmlString id, EntityType et)
 		{
 			name_ = id;
 			etype_ = et;
 			status_ = EntityData.Unknown;
+			version(GC_STATS)
+				gcStatsSum.inc();
 		}
 
 		@property void value(const(T)[] s)
@@ -105,6 +124,45 @@ template XMLDTD(T)
 
 	class DocTypeData
 	{
+		version(GC_STATS)
+		{
+			mixin GC_statistics;
+			static this()
+			{
+				setStatsId(typeid(typeof(this)).toString());
+			}
+		}
+		this()
+		{
+			version(GC_STATS)
+				gcStatsSum.inc();
+
+		}
+		~this()
+		{
+			version(GC_STATS)
+				gcStatsSum.dec();
+
+		}
+
+		private void voidMap(EntityDataMap emap)
+		{
+			foreach(k ; emap.byKey())
+			{
+				emap.remove(k);
+			}
+		}
+
+		void explode()
+		{
+			voidMap(paramEntityMap);
+			voidMap(generalEntityMap);
+			voidMap(notationMap);
+
+			destroy(this);
+
+		}
+
 		XmlString			id_;
 		ExternalID			src_;
 		//bool				resolved_;

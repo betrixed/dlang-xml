@@ -62,6 +62,11 @@ import std.stdint;
 
 import xml.dom.domt, xml.util.read, xml.test.suite;
 import std.file;
+version(GC_STATS)
+{
+	import xml.util.gcstats;
+	import core.memory;
+}
 
 void writeUsage()
 {
@@ -152,6 +157,15 @@ int main(string[] args)
 		result = TestType!(wchar)(args);
 	}
 	writefln("Result is %s",result);
+	version(GC_STATS)
+	{
+		GC.collect();
+		GCStatsSum.AllStats();
+		getchar();
+		GC.collect();
+		GCStatsSum.AllStats();
+	}
+
 	getchar();
 	return result;
 

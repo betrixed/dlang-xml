@@ -188,6 +188,12 @@ void sax2_speed(string s)
 	mainNamespace = new TagSpace();
 	bookNamespace = new TagSpace();
 
+	scope(exit)
+	{
+		destroy(visitor);
+		destroy(mainNamespace);
+		destroy(bookNamespace);
+	}
     auto bookcb = mainNamespace.create("book");
 
 	bookcb[SAX.TAG_START]
@@ -227,15 +233,9 @@ void sax2_speed(string s)
 		book.description = xml.data;
 	};
 
-
 	visitor.setupNormalize(s);
 	visitor.parseDocument();
-	visitor.namespace = null; // SaxParser does not manage this property
 
-	// Until a GC comes along that can read minds
-	destroy(mainNamespace);
-	destroy(bookNamespace);
-	destroy(visitor);
 }
 
 import xml.std.xmlSlicer;
@@ -286,9 +286,14 @@ void sax1_speed(string s)
 
 	mainHandlers = new TagSpace();
 	bookHandlers = new TagSpace();
-
 	visitor.namespace = mainHandlers;
 
+	scope(exit)
+	{	// wipeouts do help
+		destroy(bookHandlers);
+		destroy(mainHandlers);
+		destroy(visitor);
+	}
 	mainHandlers["book", SAX.TAG_START] = (const SaxEvent xml) {
 		book.id = xml.attributes.get("id");
 		visitor.namespace = bookHandlers;	// to book namespace
@@ -326,10 +331,6 @@ void sax1_speed(string s)
 
 	visitor.setupNoSlice!char(s);
 	visitor.parseDocument();
-	visitor.namespace = null;
-	destroy(bookHandlers);
-	destroy(mainHandlers);
-	destroy(visitor);
 	
 
 }
@@ -467,7 +468,7 @@ void main(string[] argv)
     uintptr_t	  runs = 100;
 
     // testDomAssembly();
-
+	ticketTests();
     uintptr_t act = argv.length;
 
     uintptr_t i = 0;
@@ -525,15 +526,19 @@ void emptyDocElement()
     };
 
     auto tv = new SaxParser();
-	auto handler = tv.namespace;
-
+	auto handler = new TagSpace();
+	
+	scope(exit)
+	{
+		destroy(tv);
+		destroy(handler);
+	}
 	tv.setupNormalize(doc);
-
+	tv.namespace = handler;
 	
     handler["main", SAX.TAG_START] = xdg;
-
+	
     tv.parseDocument();
-	destroy(tv);
 
 
 }
@@ -547,8 +552,13 @@ void testTicket8()
         try
         {
             auto tv = new SaxParser();
-			auto handler = tv.namespace; // use class default
-
+			auto handler = new TagSpace();
+			
+			scope(exit)
+			{
+				destroy(tv);
+				destroy(handler);
+			}
 			char[]	btext;
 
 			handler["B", SAX.TAG_START] = (const SaxEvent ret)
@@ -565,9 +575,9 @@ void testTicket8()
             {
 				assert (btext == "\nhello\n\n", "Collect text only");
             };
+			tv.namespace = handler;
             tv.setupNormalize(src);
 			tv.parseDocument();
-			destroy(tv); // this should take care of everything
 
         }
         catch(Exception e)
@@ -594,16 +604,16 @@ void testTicket7()
 {
     bool ticketTest(string src)
     {
+		void outdoc(const(char)[] s)
+		{
+			write(s);
+		}
         try
         {
-            auto xml = new SaxParser();
-			xml.setupRaw(src);
+            auto xml = new ArrayDomBuilder();
+			xml.setSource(src);
             xml.parseDocument();
-			version(Explode)
-			{
-			scope(exit)
-				xml.explode();
-			}
+			xml.document.printOut(&outdoc,2);
 		}
         catch(Exception e)
         {

@@ -659,7 +659,20 @@ package:
     XmlString internal_;
 
 public:
+	version(GC_STATS)
+	{
+		mixin GC_statistics;
+		static this()
+		{
+			setStatsId(typeid(typeof(this)).toString());
+		}
+	}
 
+	~this()
+	{
+		version(GC_STATS)
+			gcStatsSum.dec();
+	}
     override const NodeType getNodeType()
     {
         return NodeType.Document_type_node;
@@ -669,6 +682,12 @@ public:
 	{
 		publicId = pubid;
 		systemId = sysid;
+	}
+
+	override void explode()
+	{
+		entities_.explode();
+		notations_.explode();
 	}
 
     XmlString getPublicId()
@@ -685,6 +704,9 @@ public:
         id_ = name;
         entities_ = new NamedNodeMap();
         notations_ = new NamedNodeMap();
+		version(GC_STATS)
+			gcStatsSum.inc();
+
     }
     /// what good is this?
     XmlString getName()
@@ -804,11 +826,26 @@ class Document  : Node
     XmlString		uri_;
 	uintptr_t		refcount_;
 public:
-
+	version(GC_STATS)
+	{
+		mixin GC_statistics;
+		static this()
+		{
+			setStatsId(typeid(typeof(this)).toString());
+		}
+	}
     this()
     {
         init("NoName");
+
     }
+
+	~this()
+	{
+		version(GC_STATS)
+			gcStatsSum.dec();
+
+	}
 	/// Initialise with a name, but this does not make a Document Element.
     this(XmlString name)
     {
@@ -1130,8 +1167,10 @@ public:
         src.forEachAttr(&copyAttr);
     }
 
-    void init(XmlString name)
+    private void init(XmlString name)
     {
+		version(GC_STATS)
+			gcStatsSum.inc();
         id_ = name;
 
         standalone_ = true;
@@ -3068,27 +3107,30 @@ version(GC_STATS)
 
 	alias AttrNS[XmlString] AttrNSMap;
 
-    NameSpaceSet	parent_;
-
     AttrNSMap		nsdefs_;	 // namespaces defined by <id> or null for default
-    ElementNS		elem_;
 
     /// construct
-    this(ElementNS e, NameSpaceSet nss)
+    this()
     {
-        elem_ = e;
-        parent_ = nss;
-        // start with all of parents entries
-        if (parent_ !is null)
-        {
-            foreach(k,v ; parent_.nsdefs_)
-            {
-                nsdefs_[k] = v;
-            }
-        }
 		version(GC_STATS)
 			gcStatsSum.inc();
     }
+    ~this()
+    {
+		version(GC_STATS)
+			gcStatsSum.dec();
+    }	
+	void explode()
+	{
+		if (nsdefs_ !is null)
+		{
+			foreach(k ; nsdefs_.byKey)
+			{
+				nsdefs_.remove(k);
+			}
+			nsdefs_ = null;
+		}
+	}
 
     /// return attribute holding URI for prefix
     AttrNS getAttrNS(XmlString nsprefix)

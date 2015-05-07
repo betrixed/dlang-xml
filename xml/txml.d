@@ -11,6 +11,9 @@ import xml.xmlChar;
 import xml.xmlError;
 import xml.xmlAttribute;
 
+version(GC_STATS)
+	import xml.util.gcstats;
+
 enum CharFilter
 {
     filterOff, filterOn, filterAlwaysOff
@@ -118,6 +121,26 @@ template xmlt(T) {
 		SAX				eventId;
 		XmlString		data;
 		AttributeMap	attributes;
+		version(GC_STATS)
+		{
+			mixin GC_statistics;
+			static this()
+			{
+				setStatsId(typeid(typeof(this)).toString());
+			}
+		}
+		this()
+		{
+			version(GC_STATS)
+				gcStatsSum.inc();
+
+		}
+		~this()
+		{
+			version(GC_STATS)
+				gcStatsSum.dec();
+
+		}
 	}
 
 	interface IXmlErrorHandler
@@ -137,7 +160,26 @@ template xmlt(T) {
 			Buffer!string			errors_;
 			XmlErrorLevel			maxError_;
 		}
+		version(GC_STATS)
+		{
+			mixin GC_statistics;
+			static this()
+			{
+				setStatsId(typeid(typeof(this)).toString());
+			}
+		}
+		this()
+		{
+			version(GC_STATS)
+				gcStatsSum.inc();
 
+		}
+		~this()
+		{
+			version(GC_STATS)
+				gcStatsSum.dec();
+
+		}
 		XmlErrorLevel pushError(string s, XmlErrorLevel level)
 		{
 			errors_.put(s);

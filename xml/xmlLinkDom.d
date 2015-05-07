@@ -192,9 +192,15 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	void explode()
 	{
 		parser_.explode();
+		destroy(parser_);
 		parser_ = null;
 	    doc_ = null;
 		stack_.length = 0;
+		if (nsSet_ !is null)
+		{
+			nsSet_.explode();
+			nsSet_ = null;
+		}
 		version(TagNesting)
 			if (rootNest_)
 				rootNest_.explode();
@@ -229,6 +235,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		{
 			maxError_ = XmlErrorLevel.OK;
 			errors_.length = 0;
+			destroy(errorReport);
 		}
 		else
 			throw errorReport;
@@ -348,18 +355,18 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		return format("Attempt to unbind %s",atname);
 	}
 
-	NameSpaceSet reviewAttrNS(ElementNS elem, NameSpaceSet pnss)
+	void reviewAttrNS(ElementNS elem)
     {
         // A namespace definition <id> exists if there is a xmlns:<id>="URI" in the tree root.
         // for each attribute, check if the name is a namespace specification
 
         NamedNodeMap amap = elem.getAttributes();
         if (amap is null)
-            return pnss;
+            return;
 
         AttrNS rdef;			// attribute which defines a namespace
         AttrNS* pdef;
-        NameSpaceSet nss;
+
         // attributes which are not namespace declarations
         AttrNS[]     alist;
         XmlString prefix;
@@ -399,10 +406,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 
             if (isNameSpaceDef)
             {
-                if (nss is null)
+                if (nsSet_ is null)
                 {
-                    nss = new NameSpaceSet(elem, pnss);
-                    pnss = nss;
+                    nsSet_ = new NameSpaceSet();
                 }
 
                 bool bind = true;
@@ -425,7 +431,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                         // default namespace unbinding ok for 1.0
                         bind = false;
                         // is it an error to unbind a non-existing name space?
-                        nss.nsdefs_[localName] = nsa; // register as unbound
+                        nsSet_.nsdefs_[localName] = nsa; // register as unbound
                     }
                     else
                     {
@@ -499,7 +505,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                         }
                     }
 				DO_BIND:
-                    nss.nsdefs_[localName] = nsa; // register as bound to URI value
+                    nsSet_.nsdefs_[localName] = nsa; // register as bound to URI value
                 }
             }
             else
@@ -519,9 +525,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         {
             prefix = nsa.getPrefix();
             needNS = true;
-            if (pnss !is null)
+            if (nsSet_ !is null)
             {
-                pdef = prefix in pnss.nsdefs_;
+                pdef = prefix in nsSet_.nsdefs_;
                 if (pdef !is null)
                 {
                     rdef = *pdef;
@@ -555,7 +561,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         }
 
         // pairwise check, prove no two attributes with same local name and different prefix have same URI
-        if (pnss !is null)
+        if (nsSet_ !is null)
         {
             for(int nix = 0; nix < alist.length; nix++)
             {
@@ -586,9 +592,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         }
         checkErrorStatus();
 
-        return pnss;
+        return;
     }
-    void reviewElementNS(ElementNS elem, NameSpaceSet pnss)
+    void reviewElementNS(ElementNS elem)
     {
         // now review element name itself
         XmlString prefix;
@@ -599,9 +605,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 
         bool needNS = (prefix.length > 0);
 
-        if (pnss !is null)
+        if (nsSet_ !is null)
         {
-            auto pdef = prefix in pnss.nsdefs_;
+            auto pdef = prefix in nsSet_.nsdefs_;
             if (pdef !is null)
             {
                 auto rdef = *pdef;
@@ -720,8 +726,8 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 ElementNS ens = cast(ElementNS) node;
                 if (ens)
                 {
-                    nsSet_ = reviewAttrNS(ens, nsSet_);
-                    reviewElementNS(ens, nsSet_);
+					reviewAttrNS(ens);
+                    reviewElementNS(ens);
                 }
             }
         }

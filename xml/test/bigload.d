@@ -9,6 +9,7 @@ import std.stream;
 import xml.xmlLinkDom;
 import xml.util.bomstring;
 import xml.dom.domt;
+import std.variant;
 //import stdxml = std.xml; // only if modified as for GC_STATS
 
 // How good is your garbage collection service. Is it fast? Does it work?
@@ -161,6 +162,9 @@ void loadFileTest(string fname)
 
 	alias xml.dom.domt.XMLDOM!char	xmldom;
 	auto doc = new xmldom.Document();
+	auto config = doc.getDomConfig();
+	config.setParameter("namespace-declarations",Variant(false));
+
 	parseXmlFile!(char)(doc, fname, true);
 	doc.explode();
 	sw.stop();

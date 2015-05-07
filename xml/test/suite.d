@@ -9,6 +9,10 @@ import xml.textInput;
 import std.stdint, std.path, std.stdio;
 import std.algorithm;
 
+version(GC_STATS)
+{
+	import xml.util.gcstats;
+}
 import std.file, std.conv, std.variant, std.string;
 template XMLTESTS(T)
 {
@@ -92,15 +96,21 @@ template XMLTESTS(T)
 							getchar(); // wait for setting up break points in debugger
 							XmlConfResult rt1 = runTest(t,baseDir,true);
 							showResult(rt1);
+							
 							XmlConfResult rt0 = runTest(t,baseDir,false);
 							showResult(rt0);
+							
 							t.passed = rt0.passed && rt1.passed;
+							destroy(rt1);
+							destroy(rt0);
 							if (!summary)
 								writeln(t.description);
 							if (!t.passed)
 							{
 								t.failMessage();
 							}
+							
+							
 						}
 						else
 						{
@@ -123,6 +133,11 @@ template XMLTESTS(T)
 			writeln("Test file  ", fileName, " from ", dirName);
 
 			Document doc = new Document(null,to!XmlString(path)); // path here is just a tag label.
+
+			scope(exit)
+			{
+				doc.explode();
+			}
 			auto peh = new ParseErrorHandler();
 
 			auto config = doc.getDomConfig();
@@ -314,6 +329,25 @@ template XMLTESTS(T)
 	{
 		uint	  domErrorLevel;
 		string	  msg;
+		version(GC_STATS)
+		{
+			mixin GC_statistics;
+			static this()
+			{
+				setStatsId(typeid(typeof(this)).toString());
+			}
+		}
+		this()
+		{
+			version(GC_STATS)
+				gcStatsSum.inc();
+		}
+		~this()
+		{
+			version(GC_STATS)
+				gcStatsSum.dec();
+		}
+
 		override bool handleError(DOMError error)
 		{
 			string[]  errors;
@@ -374,6 +408,24 @@ template XMLTESTS(T)
 		string    output;
 		string[]  errors;
 
+		version(GC_STATS)
+		{
+			mixin GC_statistics;
+			static this()
+			{
+				setStatsId(typeid(typeof(this)).toString());
+			}
+		}
+		this()
+		{
+		version(GC_STATS)
+			gcStatsSum.inc();
+		}
+		~this()
+		{
+			version(GC_STATS)
+				gcStatsSum.dec();
+		}
 		override bool handleError(DOMError error)
 		{
 			bool result = false;
@@ -472,6 +524,10 @@ template XMLTESTS(T)
 		result.validate = validate;
 
 		Document doc; // keep for big exceptions
+		scope(exit)
+		{
+			doc.explode();
+		}
 
 		try
 		{
@@ -507,6 +563,7 @@ template XMLTESTS(T)
 				writeln(t.id);
 			}
 			parseXmlFile(doc, sourceXml, validate);
+			// or parseXmlSliceFile
 		}
 
 
@@ -535,6 +592,7 @@ template XMLTESTS(T)
 						writefln("%s: %s", i+1, s);
 				}
 			}
+			destroy(x);
 		}
 
 		catch(Exception ex)

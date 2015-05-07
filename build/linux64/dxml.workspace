@@ -4,5 +4,6 @@
 		<Project filename="speed/speed.cbp" />
 		<Project filename="bigload/bigload.cbp" />
 		<Project filename="conformance/conformance.cbp" />
+		<Project filename="extract/extract.cbp" />
 	</Workspace>
 </CodeBlocks_workspace_file>

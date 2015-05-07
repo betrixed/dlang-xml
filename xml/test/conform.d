@@ -92,7 +92,7 @@ int TestType(T)(string[] args)
 	alias XMLTESTS!T.XmlString XmlString;
     // this registers for this thread and call type.
 
-	
+
 	int oix = 0;
     while(oix < args.length)
     {
@@ -150,7 +150,7 @@ int main(string[] args)
         return 0;
     }
 	EUC_JP!(CharIR).register("EUC-JP");
-	
+
 	int result = TestType!(char)(args);
 	if (result == 0)
 	{
@@ -162,8 +162,6 @@ int main(string[] args)
 		GC.collect();
 		GCStatsSum.AllStats();
 		getchar();
-		GC.collect();
-		GCStatsSum.AllStats();
 	}
 
 	getchar();

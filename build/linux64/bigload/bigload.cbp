@@ -24,7 +24,7 @@
 				<Option compiler="dmd" />
 				<Compiler>
 					<Add option="-O" />
-					<Add option="-I../../../" />
+					<Add option="-I../../../ -version=GC_STATS" />
 				</Compiler>
 			</Target>
 		</Build>

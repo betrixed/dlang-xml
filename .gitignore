@@ -1,2 +1,6 @@
 xmlconf/
 **/*.suo
+**/Release/
+**/Debug/
+**/*.depend
+**/*.layout

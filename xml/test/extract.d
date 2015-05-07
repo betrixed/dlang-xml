@@ -4,12 +4,13 @@ import xml.txml, xml.xmlError;
 import xml.dom.domt;
 import xml.xmlSax;
 import xml.textInput, xml.util.read;
+import xml.xmlArrayDom;
 
 import std.stdio, std.datetime,std.string, std.stdint;
 
 import std.variant, std.conv, std.random, std.file;
 
-alias xml.xmlArrayDom.XMLArrayDom!char  ArrayDOM;
+alias XMLArrayDom!char  ArrayDOM;
 alias ArrayDOM.ArrayDomBuilder	ArrayDomBuilder;
 
 import core.memory;
@@ -60,7 +61,7 @@ void nesting_tagvisitor()
 {
     auto tv = new SaxParser();
 	auto nspace = new TagSpace();
-	tv.namespace = nspace; 
+	tv.namespace = nspace;
 
     /// The callbacks will all have different keys, so only need one set, for this kind of document
     /// But still need to set the parser stack callback object for each level, usually in a TAG_START callback.
@@ -92,12 +93,12 @@ void nesting_tagvisitor()
     handler[SAX.COMMENT] = textDg;
     handler[SAX.XML_DEC] = xmlDecDg;
 
-	
+
 	Sax[]	saveDefaults;   // a  stack of handler sets
 	auto bce = new  ArrayDomBuilder();
 
 	auto ctags = new Sax("C");
-	nspace.put(ctags);  
+	nspace.put(ctags);
 
 	SaxDg onTagEmpty = (const SaxEvent xml)
 	{
@@ -202,7 +203,7 @@ void sax2_speed(string s)
 		visitor.namespace = bookNamespace;
 	};
 
-	bookcb[SAX.TAG_END] 
+	bookcb[SAX.TAG_END]
 	= (const SaxEvent xml) {
 		books ~= book;
 		visitor.namespace = mainNamespace;
@@ -298,11 +299,11 @@ void sax1_speed(string s)
 		book.id = xml.attributes.get("id");
 		visitor.namespace = bookHandlers;	// to book namespace
 		visitor.parseDocument(-1);			// -1 to exit just after book TAG_END
-		visitor.namespace = mainHandlers;	
+		visitor.namespace = mainHandlers;
 		books ~= book;
 	};
 
-	visitor.namespace = mainHandlers;	
+	visitor.namespace = mainHandlers;
 
 	/// Use convenience to set up a TagBlock for each element.
 	bookHandlers["author", SAX.TEXT] = (const SaxEvent xml) {
@@ -331,7 +332,7 @@ void sax1_speed(string s)
 
 	visitor.setupNoSlice!char(s);
 	visitor.parseDocument();
-	
+
 
 }
 
@@ -371,7 +372,7 @@ void runTests(string inputFile, uintptr_t runs)
     string s = readTextBom!char(inputFile, bomMark);
 	fullCollect();
 
-	enum uint numTests = 6;
+	enum uint numTests = 3;
 	double[numTests] sum;
 	double[numTests]	sample;
 
@@ -446,8 +447,11 @@ void runTests(string inputFile, uintptr_t runs)
 	}
 
 	sum[] /= repeat_ct;
+    auto control = sum[0];
+    foreach(d ; sum)
+        if (control > d)
+            control = d;
 
-	double control = sum[$-1];
 	writeln("averages: ", runs, " runs");
 	writefln(" %8s %8s %8s %8s %8s %8s", "std.xml",  "sax1",  "sax2",  "-",  "-", "-");
 	foreach(v ; sum)
@@ -506,7 +510,7 @@ void main(string[] argv)
 		//version(TrackCount)
 		//	listTracks();
 		writeln("Enter to exit");
-		
+
 	}
 	getchar();
 }
@@ -527,7 +531,7 @@ void emptyDocElement()
 
     auto tv = new SaxParser();
 	auto handler = new TagSpace();
-	
+
 	scope(exit)
 	{
 		destroy(tv);
@@ -535,9 +539,9 @@ void emptyDocElement()
 	}
 	tv.setupNormalize(doc);
 	tv.namespace = handler;
-	
+
     handler["main", SAX.TAG_START] = xdg;
-	
+
     tv.parseDocument();
 
 
@@ -553,7 +557,7 @@ void testTicket8()
         {
             auto tv = new SaxParser();
 			auto handler = new TagSpace();
-			
+
 			scope(exit)
 			{
 				destroy(tv);
@@ -637,7 +641,7 @@ void testTicket7()
 void ticketTests()
 {
     emptyDocElement();
-   
+
     testTicket7();
     testTicket8();
 }

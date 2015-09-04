@@ -241,11 +241,6 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			throw errorReport;
 	}
 
-	void setEncoding(const(T)[] codeName)
-	{
-		// this should be done on document print out, or by parser on document.
-	}
-
 
 	XmlError preThrow(XmlError ex)
 	{
@@ -260,6 +255,13 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			return preThrowHandler(ex, eh, spos);
 		}
 		return ex;
+	}
+
+	Exception caughtXmlError(XmlError x, XmlErrorLevel level)
+	{
+		auto s = x.toString();
+		pushError(s, level);
+		return preThrow(new XmlError(s, level));
 	}
 	Exception caughtException(Exception x, XmlErrorLevel level)
 	{
@@ -1386,7 +1388,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			return false;
 		}
 
-		bool missingElement(string s)
+		bool missingElement(XmlString s)
 		{
 			pushError(format("Expected (%s) in element sequence", s));
 			return badSequence();

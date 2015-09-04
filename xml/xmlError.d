@@ -44,6 +44,20 @@ class XmlError : Exception {
 		errorList_ = list;
 	}
 
+	override string  toString()
+	{
+		string result = msg;
+		if (result !is null)
+			errorList_ ~= result;
+
+		if (errorList_.length > 0)
+		{
+			result = join(errorList_,'\n');
+		}
+
+		return result;
+	}
+
 	string[] errorList() @property 
 	{
 		return errorList_;

@@ -35,6 +35,8 @@ class XmlParser(T)  {
 		}
     }
 	private {
+		string				xmlEncoding_;
+
 		bool				validate_;
 		bool				isStandalone_;
 		bool				namespaceAware_;
@@ -49,6 +51,7 @@ class XmlParser(T)  {
 		bool				deviantData_; // sliced data run was broken
 		bool				inCharData;
 		bool				eventMode_; // results by events
+		
 		BBCount				bbct;
 	}
 
@@ -927,16 +930,20 @@ class XmlParser(T)  {
 
 			if (namespaceAware_ && (indexOf(target,':') >= 0))
 				throw errors_.makeException(format(": in process instruction name %s for namespace aware parse",target));
-
+			
 			if (target == "xml")
 			{
+				Exception badThrow = null;
+
 				if (inDTD_)
 					throw errors_.makeException("Xml declaration may not be in DTD");
 				if (state_ != PState.P_PROLOG || (spaceCt > 0) || (itemCount > 0))
 					throw errors_.makeException("xml declaration should be first");
+				
 				if (!hasDeclaration)
 				{
 					hasDeclaration = true;
+					
 					try
 					{
 						doXmlDeclaration();
@@ -944,16 +951,20 @@ class XmlParser(T)  {
 						return;
 					}
 					catch (XmlError xm)
-					{
-						throw errors_.caughtException(xm, xm.level);
+					{	
+						auto s = xm.toString();
+						badThrow = errors_.preThrow(new XmlError(s, xm.level));
 					}
 					catch (Exception ex)
 					{
-						throw errors_.caughtException(ex);
+						badThrow = errors_.preThrow(new XmlError(ex.msg));
 					}
 				}
 				else
-					throw errors_.makeException("Duplicate xml declaration");
+					badThrow = errors_.makeException("Duplicate xml declaration");
+
+				if (badThrow !is null)
+					throw badThrow;
 			}
 			auto lcase = target.toLower();
 
@@ -1344,6 +1355,11 @@ class XmlParser(T)  {
 			itemCount++;
 		}
 
+		// return parsed encoding
+		string getXmlEncoding()
+		{
+			return xmlEncoding_;
+		}
 		/// Chicken and egg. Start off by not knowing encoding, except by BOM
 		/// After reading coding declaration, may need to change the source processing.
 		/// Do by events call back?  Throw and catch own exception?
@@ -1362,9 +1378,10 @@ class XmlParser(T)  {
 			try
 			{
 				// encoding stuff in dchar ?
-				errors_.setEncoding(encoding);
-				if (fillSource_)
-					fillSource_.setEncoding(to!string(encoding));
+				// errors_.setEncoding(encoding);
+				xmlEncoding_ = to!string(encoding);
+				if (fillSource_ !is null)
+					fillSource_.setEncoding(xmlEncoding_);
 			}
 			catch (XmlError ex)
 			{
@@ -4309,11 +4326,19 @@ class XmlParser(T)  {
 		{
 			return sf.fillData(data,pos);
 		}
+	
 		ep.initSource(&getData);
         ep.frontFilterOn();
 		ep.dtd_ = dtd_;
 		ep.isStandalone_ = false;
-		
+
+		if (xmlEncoding_.length > 0)
+		{
+			// warning - ep has no internal fillSource_, setXmlEncoding won't work on it.
+			ep.setXmlEncoding(to!(const(T)[])(xmlEncoding_));
+			sf.setEncoding(xmlEncoding_);
+		}
+
 		bool wasInternal = dtd_.isInternal_;
 		dtd_.isInternal_ = false;
 		scope(exit)

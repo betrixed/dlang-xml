@@ -800,6 +800,22 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		}
 		//lastCloseTag_ = level_.tag_;
 		//TODO: validations
+
+		// get a list of each kind of child element.
+		// ensure that each kind of child was allowed.
+
+		// get a list of each mandatory element
+		auto edef = level_.def_;
+
+		if (edef !is null)
+		{
+			if (parser_.validate())
+			{
+				validElementContent(edef, level_.e_, this);
+				if (maxError_ != 0)
+					checkErrorStatus();
+			}
+		}
 		auto slen = stack_.length;
 		if (slen > 0)
 		{
@@ -1362,10 +1378,18 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		{
 			events.pushError(s,XmlErrorLevel.FATAL);
 		}
+
+
 		bool badSequence()
 		{
 			pushError(format("Missing element choice of %s",toDTDString(edef.flatList,itemIX)));
 			return false;
+		}
+
+		bool missingElement(string s)
+		{
+			pushError(format("Expected (%s) in element sequence", s));
+			return badSequence();
 		}
 		clistinfo* stacktop;
 
@@ -1393,7 +1417,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 								if (!hasAnotherChoice())
 								{
 									if ((clist.occurs & ChildOccurs.oc_allow_zero)==0)
-										return badSequence();
+										return missingElement(clist.id);
 									else
 									{
 										stacktop.match = true;
@@ -1464,7 +1488,8 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 								{
 									if (!hasAnotherChoice())
 									{
-										return badSequence();
+										
+										return missingElement(ce.id);
 									}
 								}
 								break;

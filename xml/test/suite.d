@@ -38,7 +38,7 @@ template XMLTESTS(T)
 		string		baseDir;
 		string		uri;
 		XmlString  namespace;
-		string  edition; // some tests are XML edition dependent (blast: why cannot this have been put in the version=?)
+		string  edition;
 		bool    passed;
 		bool    summary;
 

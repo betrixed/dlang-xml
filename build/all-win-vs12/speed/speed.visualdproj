@@ -96,6 +96,7 @@
   <exefile>$(OutDir)\$(ProjectName).exe</exefile>
   <useStdLibPath>1</useStdLibPath>
   <cRuntime>2</cRuntime>
+  <privatePhobos>0</privatePhobos>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -197,6 +198,7 @@
   <exefile>$(OutDir)\$(ProjectName).exe</exefile>
   <useStdLibPath>1</useStdLibPath>
   <cRuntime>1</cRuntime>
+  <privatePhobos>0</privatePhobos>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -214,10 +216,12 @@
    <Folder name="test">
     <File path="..\..\..\xml\test\books.xml" />
     <File path="..\..\..\xml\test\speed2.d" />
+    <File path="..\..\..\xml\test\suite.d" />
    </Folder>
    <Folder name="util">
     <File path="..\..\..\xml\util\bomstring.d" />
     <File path="..\..\..\xml\util\buffer.d" />
+    <File path="..\..\..\xml\test\conform.d" />
     <File path="..\..\..\xml\util\gcstats.d" />
     <File path="..\..\..\xml\util\inputEncode.d" />
     <File path="..\..\..\xml\util\read.d" />

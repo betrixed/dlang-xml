@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "conformance", "conformance\conformance.visualdproj", "{FE58F9F6-5A95-40E7-9B9A-644B936B5F64}"
 EndProject
 Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "speed", "speed\speed.visualdproj", "{9588E0CD-50E5-4EF9-9D46-AF6385E79D67}"
@@ -8,6 +10,10 @@ EndProject
 Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "bigload", "bigload\bigload.visualdproj", "{8E2EE214-CB61-4C24-A043-B9124E2014B7}"
 EndProject
 Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "extract", "extract\extract.visualdproj", "{2481E9BC-E336-4264-8249-19B90378742E}"
+EndProject
+Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "validate", "validate\validate.visualdproj", "{BABFF220-A588-4340-944B-BD7A87861A28}"
+EndProject
+Project("{002A2DE9-8BB6-484D-9802-7E4AD4084715}") = "Version1", "..\..\..\xmlp\build\Version1\Version1.visualdproj", "{D11057F9-183C-499B-9241-49F9A5CBD3E6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,6 +37,14 @@ Global
 		{2481E9BC-E336-4264-8249-19B90378742E}.Debug|Win32.Build.0 = Debug|Win32
 		{2481E9BC-E336-4264-8249-19B90378742E}.Release|Win32.ActiveCfg = Release|Win32
 		{2481E9BC-E336-4264-8249-19B90378742E}.Release|Win32.Build.0 = Release|Win32
+		{BABFF220-A588-4340-944B-BD7A87861A28}.Debug|Win32.ActiveCfg = Debug|Win32
+		{BABFF220-A588-4340-944B-BD7A87861A28}.Debug|Win32.Build.0 = Debug|Win32
+		{BABFF220-A588-4340-944B-BD7A87861A28}.Release|Win32.ActiveCfg = Release|Win32
+		{BABFF220-A588-4340-944B-BD7A87861A28}.Release|Win32.Build.0 = Release|Win32
+		{D11057F9-183C-499B-9241-49F9A5CBD3E6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D11057F9-183C-499B-9241-49F9A5CBD3E6}.Debug|Win32.Build.0 = Debug|Win32
+		{D11057F9-183C-499B-9241-49F9A5CBD3E6}.Release|Win32.ActiveCfg = Release|Win32
+		{D11057F9-183C-499B-9241-49F9A5CBD3E6}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

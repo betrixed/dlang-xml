@@ -38,7 +38,11 @@ class XmlError : Exception {
 		level_ = level;
 		super(msg);
 	}
-
+	
+	void addMsg(string line)
+	{
+		errorList_ ~= line;
+	}
 	void errorList(string[] list) @property
 	{
 		errorList_ = list;

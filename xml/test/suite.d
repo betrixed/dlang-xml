@@ -447,18 +447,6 @@ template XMLTESTS(T)
 			{
 				errors ~= format("filepos %d,  line %d, col %d", loc.getByteOffset(), loc.getLineNumber(), loc.getColumnNumber());
 			}
-			auto ex = error.getRelatedException();
-			if (ex !is null)
-			{
-				auto xe = cast(XmlError) ex;
-				if (xe !is null)
-				{
-					errors  ~= xe.errorList;
-				}
-				else {
-					errors ~= ex.toString();
-				}
-			}
 
 			if (errors.length == 0)
 			{

@@ -266,7 +266,7 @@ template xmlt(T) {
 static string badCharMsg(dchar c)
 {
 	auto val = cast(uint)c;
-	if ( ((val >= 0xD800) && (val < 0xE000)) || ((val > 0xFFFD) && (val < 0x10000)) || (val <= 0x110000))
+	if ( ((val >= 0xD800) && (val < 0xE000)) || ((val > 0xFFFD) && (val < 0x10000)) || (val > 0x110000))
 		return format("Forbidden character range 0x%x\n", val);
 	return format("bad character 0x%x [%s]\n", val, c);
 }

@@ -1252,25 +1252,20 @@ private:
     {
         posRef = cir_.sourceReference();
         uintptr_t i = 0;
-        try
+
+        while(i < buffer.length)
         {
-            while(i < buffer.length)
+            if (!charDo_(cir_,buffer[i]))
             {
-                if (!charDo_(cir_,buffer[i]))
-                {
-                    if (cir_.empty && (i > 0))
-					{
-                        eof_ = true;
-					}
-                    break;
-                }
-				i++;
+                if (cir_.empty && (i > 0))
+				{
+                    eof_ = true;
+				}
+                break;
             }
+			i++;
         }
-        catch (CharSequenceError ex)
-        {
-            throw recodeFailed(posRef + i, ex.toString());
-        }
+      
         return i;
     }
 

@@ -4297,7 +4297,7 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto s = File(uri);
+		auto s = new FileReader(uri);
 		auto sf = new XmlFileReader(s);
 		ulong	pos;
 
@@ -4374,7 +4374,7 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto s = File(uri);
+		auto s = new FileReader(uri);
 		auto sf = new XmlFileReader(s);
 		ulong	pos;
 

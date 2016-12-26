@@ -97,7 +97,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		doc_ = d;
 		setFromDocument();
 		addSystemPath(normalizedDirName(srcPath));
-		auto s = File(srcPath);
+		auto s = new FileReader(srcPath);
 		auto sf = new XmlFileReader(s);
 		parser_.fillSource = sf;
 		parser_.parseAll();

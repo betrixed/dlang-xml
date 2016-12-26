@@ -673,7 +673,7 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 
 	void setFile(string filename)
 	{
-        auto s = File(filename);
+        auto s = new FileReader(filename);
 		parser_.fillSource = new XmlFileReader(s);
 	}
     //

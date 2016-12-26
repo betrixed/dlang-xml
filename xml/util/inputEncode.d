@@ -43,7 +43,7 @@ alias bool function(Char32pull src, ref dchar c) Recode32Fn;
 module xml.util.inputEncode;
 
 import core.exception;
-import std.system, std.stdint, std.stream; 
+import std.system, std.stdint, std.stdio;
 import std.conv, std.string, std.traits, std.exception;
 import xml.util.buffer;
 
@@ -107,9 +107,9 @@ align(1) struct dswapchar
 
 
 private static const wstring windows1252_map =
-    "\u20AC\uFFFD\u201A\u0192\u201E\u2026\u2020\u2021"
-    "\u02C6\u2030\u0160\u2039\u0152\uFFFD\u017D\uFFFD"
-    "\uFFFD\u2018\u2019\u201C\u201D\u2022\u2103\u2014"
+    "\u20AC\uFFFD\u201A\u0192\u201E\u2026\u2020\u2021" ~
+    "\u02C6\u2030\u0160\u2039\u0152\uFFFD\u017D\uFFFD" ~
+    "\uFFFD\u2018\u2019\u201C\u201D\u2022\u2103\u2014" ~
     "\u02DC\u2122\u0161\u203A\u0153\uFFFD\u017E\u0178";
 
 
@@ -133,7 +133,7 @@ bool gotit = r.pull(h); // can use pull to do all at once
 /** Mass buffer decode for char to dchar.
 Fills dchar[] array, till dchar[] array is full, or src array is exhausted, or has not enough
 characters to finish a UTF sequence.  Returns number of source characters consumed, and
-number of characters converted, 
+number of characters converted,
 */
 
 uintptr_t decode_char(const(char)[] src, dchar[] dest, ref uintptr_t pos )
@@ -162,8 +162,8 @@ uintptr_t decode_char(const(char)[] src, dchar[] dest, ref uintptr_t pos )
         }
 
         int tails = void;
-        if (d32 < 0xE0)// to 07FF 
-		{       
+        if (d32 < 0xE0)// to 07FF
+		{
             tails = 1;
             d32 = d32 & 0x1F;
         }
@@ -607,7 +607,7 @@ template RecodeDChar(T)
     {
         string upcase = name.toUpper();
         switch(name)
-        {	
+        {
         case "UTF-32":
         case "UTF-32BE":
         case "UTF-32LE":
@@ -719,102 +719,5 @@ static void register(ByteOrderMark bome)
 }
 
 
-/**
- * Read beginning of a block stream, and return what appears to
- * be a valid ByteOrderMark class describing the characteristics of any
- * BOM found.   If there is no BOM, the instance ByteOrderRegistry.noMark will
- * be returned, describing a UTF8 stream, system endian, with empty BOM array,
- * and character size of 1.
- *
- * The buffer array will hold all values in stream sequence, that were read by the
- * function after reading the BOM. If no BOM was recognized the buffer array contains
- * all the values currently read from the stream. The number of bytes in buffer
- * will be a multiple of the number of bytes in the detected character size of the stream
- * (ByteOrderMark.charSize). If end of stream is encountered or an exception occurred
- * the eosFlag will be true.
- *
- */
-ByteOrderMark readStreamBOM(Stream s, ref ubyte[] result, out bool eosFlag)
-{
-    ubyte		test;
-	ubyte[]		bomchars;
 
-
-    ByteOrderMark[] goodList = ByteOrderRegistry.list.dup;
-    ByteOrderMark[] fullMatch;
-
-    auto goodListCount = goodList.length;
-    ByteOrderMark found = null;
-    try
-    {
-        eosFlag = false;
-        int  readct = 0;
-
-        while (goodListCount > 0)
-        {
-            s.read(test);
-            readct++;
-            bomchars ~= test;
-            foreach(gx , bm ; goodList)
-            {
-                if (bm !is null)
-                {
-                    auto marklen = bm.bom.length;
-                    if (readct <= marklen)
-                    {
-                        if (test != bm.bom[readct-1])
-                        {
-                            // eliminate from array
-                            goodList[gx] = null;
-                            goodListCount--;
-                        }
-                        else if (readct == marklen)
-                        {
-                            fullMatch ~= bm;
-                            goodList[gx] = null;
-                            goodListCount--;
-                        }
-                    }
-                }
-            }
-        }
-        if (fullMatch.length > 0)
-        {
-            // any marks fully matched ?
-            found = fullMatch[0];
-            for(size_t fz = 1; fz < fullMatch.length; fz++)
-            {
-                if (found.bom.length < fullMatch[fz].bom.length)
-                    found = fullMatch[fz];
-            }
-        }
-        else
-        {
-            found = ByteOrderRegistry.noMark;
-        }
-
-        // need to read to next full charSize to have at least 1 valid character
-        //bool validChar = true;
-        while ((bomchars.length - found.bom.length) % found.charSize != 0)
-        {
-            s.read(test);
-            bomchars ~= test;
-        }
-        // return remaining valid characters read as ubyte array
-        result = bomchars[found.bom.length .. $];
-        return found;
-    }
-    catch(Exception re)
-    {
-        if (bomchars.length == 0)
-        {
-            result.length = 0;
-            eosFlag = true;
-            return ByteOrderRegistry.noMark;
-        }
-    }
-
-    result = bomchars;
-    return ByteOrderRegistry.noMark;
-}
 

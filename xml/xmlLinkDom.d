@@ -5,7 +5,7 @@ import xml.dom.domt;
 import xml.textInput, xml.xmlChar, xml.util.read;
 import xml.dom.dtdt, xml.xmlError;
 
-import std.stream, std.path;
+import std.file, std.path;
 
 import std.string, std.stdint;
 import std.conv, std.algorithm, std.variant, std.array;
@@ -56,7 +56,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	alias xmlt!T.XmlBuffer	XmlBuffer;
 	alias xmlt!T.XmlEvent XmlEvent;
 	alias xmlt!T.IXmlErrorHandler IXmlErrorHandler;
-	
+
 
 	alias XmlParser!T		Parser;
 	alias XMLDOM!T.Node		Node;
@@ -97,8 +97,8 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		doc_ = d;
 		setFromDocument();
 		addSystemPath(normalizedDirName(srcPath));
-		auto s = new BufferedFile(srcPath);
-		auto sf = new XmlStreamFiller(s);
+		auto s = File(srcPath);
+		auto sf = new XmlFileReader(s);
 		parser_.fillSource = sf;
 		parser_.parseAll();
 	}
@@ -392,7 +392,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
             atname = nsa.getName();
 
             checkSplitName(atname, prefix, localName);
-			
+
             if (prefix.length > 0)
             {
                 isNameSpaceDef = (cmp("xmlns",prefix) == 0);
@@ -635,7 +635,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			{
 				// overrides?
 			}
-			else 
+			else
 				throw makeException(format("No namespace found for %s", elem.getNodeName()),XmlErrorLevel.FATAL);
         }
         checkErrorStatus();
@@ -698,7 +698,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		// 	collect attributes, check for duplicates, as initial add used push
 		if (s.attributes.length > 0)
 		{
-			// copy parse list 
+			// copy parse list
 			this.attrMap_ = s.attributes;
 			if (!this.attrMap_.sorted)
 			{
@@ -781,7 +781,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	}
 	final void declaration(const XmlEvent  s)
 	{
-		// use the attributes, or 
+		// use the attributes, or
 		auto docVersion = s.attributes.get("version","1.0");
 		doc_.setXmlVersion(docVersion);
 	}
@@ -825,7 +825,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         XmlString[] valueset;
         uint vct = 0;
         bool doValidate = parser_.validate();
-		
+
         auto oldLength = result.length; // check for trimming
         switch(useType)
         {
@@ -1015,7 +1015,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 valueList ~= result;
             }
             adef.values = valueList;
-			
+
         }
         if (maxError_ > 0)
         {
@@ -1119,7 +1119,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			dtdAttributeNormalize(atdef, v, aValue, attype, reqExternal);
 			// alter original list
 			if (v != aValue)
-				attrMap_[n] = aValue; 
+				attrMap_[n] = aValue;
 		}
 
         if (atlist !is null)
@@ -1540,7 +1540,7 @@ void parseXml(T,S)(XMLDOM!T.Document doc, immutable(S)[] sxml, bool validate = t
 	scope(exit)
         builder.explode();
     builder.validate(validate);
-	builder.parseNoSlice!S(doc, sxml); 
+	builder.parseNoSlice!S(doc, sxml);
 }
 void parseXmlSlice(T)(XMLDOM!T.Document doc, immutable(T)[] sxml, bool validate = true)
 {

@@ -7,13 +7,13 @@ Authors: Michael Rynn
 
 module xml.xmlArrayDom;
 
-
+import std.stdio;
 import xml.util.buffer;
 import xml.txml;
 import xml.textInput;
 import xml.dom.dtdt;
 
-import std.string, std.conv, std.exception, std.stream;
+import std.string, std.conv, std.exception;
 import std.variant;
 version(GC_STATS)
 {
@@ -25,7 +25,7 @@ debug(VERBOSE)
 	import std.stdio;
 }
 
-/// Dom is like std.xml 
+/// Dom is like std.xml
 /// Elements, Attributes, nodes, have no parent or owner member.
 
 import xml.xmlOutput;
@@ -591,8 +591,8 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 		event_ = new XmlEvent;
 		s = event_;
 	}
-	
-	// like 
+
+	// like
     override void startDoctype(Object parser)
 	{
 		doctype_ = parser_.DTD(); // get DocTypeData from parser
@@ -600,7 +600,7 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
     override void endDoctype(Object parser)
 	{
 	}
-	
+
 	override void notation(Object n)
 	{
 	}
@@ -673,8 +673,8 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 
 	void setFile(string filename)
 	{
-        auto s = new BufferedFile(filename);
-		parser_.fillSource = new XmlStreamFiller(s);
+        auto s = File(filename);
+		parser_.fillSource = new XmlFileReader(s);
 	}
     //
 	void setFileSlice(string filename)

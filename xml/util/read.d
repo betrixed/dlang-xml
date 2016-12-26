@@ -1,7 +1,7 @@
 module xml.util.read;
 
 
-import std.stream, std.path, std.file;
+import std.path, std.stdio, std.file;
 
 
 /// Input, a list of directories, and  file path. Search ordered directories for first match exists.
@@ -31,14 +31,14 @@ bool findSystemPath(string[] pathsList, string sysid, out string uri)
 /// For instance, "NUL" is a valid path and isFile returns true, but it cannot be opened or read
 bool isReadable(string uri)
 {
-	std.stream.File f = new std.stream.File();
-	f.open(uri,FileMode.In);
+	std.stdio.File f = std.stdio.File();
+	f.open(uri,"r");
 	if (f.isOpen)
 	{
 		scope(exit)
 			f.close();
 
-		return (f.available() > 0);
+		return (f.size() > 0);
 	}
 	return false;
 }

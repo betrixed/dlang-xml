@@ -5,7 +5,7 @@ import std.file;
 import std.bitmanip;
 import std.conv;
 import std.stdint;
-import std.stream;
+import std.stdio;
 import std.string;
 import std.array;
 import xml.util.buffer;
@@ -26,17 +26,29 @@ alias char[]  strmc;
 alias wchar[] strmw;
 alias dchar[] strmd;
 
-alias Algebraic!(strmc,strmw,strmd) BomString;
+alias Algebraic!(char[], wchar[], dchar[]) BomString;
+
+enum BOM : int {
+    NONE = -1,
+    UTF8,
+    UTF16LE,
+    UTF16BE,
+    UTF32LE,
+    UTF32BE
+};
 
 alias immutable(ubyte)[]  BomArray;
-/// A Byte Order Mark, or BOM, is more than just an enum. It stands for a number of associations,
-/// such as official name, its endian arrangement, an associated character storage type, and consumes
-/// either 0, 2,3,4 bytes at the beginning of a file.
-class StreamBOM
+/**
+Hold useful information about each kind of File Byte Order Mark.
+For use as a global registry.
+Official name as string, the character storage type, number of bytes per character
+*/
+
+class FileBOM
 {
     string		name;		// indexable name
-    int	bomEnum;			// associated phobos BOM enum, or -1
-    int	endianEnum;			// associated endian type, or -1
+    int	        bomEnum;			// associated phobos BOM enum, or -1
+    int	        endianEnum;			// associated endian type, or -1
     TypeInfo	type;		// storage type ? or other type?, or unknown
 
     BomArray	bomBytes;		// bytes at start of file
@@ -67,7 +79,7 @@ class StreamBOM
     /// key supports compare
     override int opCmp(Object s)
     {
-        StreamBOM sb = cast(StreamBOM) this;
+        FileBOM sb = cast(FileBOM) this;
         if (sb !is null)
             return cmp(this.name, sb.name);
         else
@@ -76,34 +88,34 @@ class StreamBOM
 }
 
 
-__gshared StreamBOM[intptr_t]	gStreamBOM;
+__gshared FileBOM[intptr_t]	gFileBOM;
 
 /// Used for no match found
-__gshared StreamBOM	gNoBOMMark;
+__gshared FileBOM	gNoBOMMark;
 
 __gshared static this()
 {
-    gNoBOMMark = new StreamBOM("UTF-8", -1, -1, typeid(char));
+    gNoBOMMark = new FileBOM("UTF-8", -1, -1, typeid(char));
     register(gNoBOMMark);
 
-    register( new StreamBOM("UTF-8", BOM.UTF8, -1, typeid(char), [0xEF, 0xBB, 0xBF]));
+    register( new FileBOM("UTF-8", BOM.UTF8, -1, typeid(char), [0xEF, 0xBB, 0xBF]));
 
-    register( new StreamBOM("UTF-16LE", BOM.UTF16LE, Endian.littleEndian, typeid(wchar),[0xFF, 0xFE] ));
-    register( new StreamBOM("UTF-16BE", BOM.UTF16BE, Endian.bigEndian, typeid(wchar), [0xFE, 0xFF] ));
+    register( new FileBOM("UTF-16LE", BOM.UTF16LE, Endian.littleEndian, typeid(wchar),[0xFF, 0xFE] ));
+    register( new FileBOM("UTF-16BE", BOM.UTF16BE, Endian.bigEndian, typeid(wchar), [0xFE, 0xFF] ));
 
-    register( new StreamBOM("UTF-32LE", BOM.UTF32LE, Endian.littleEndian, typeid(dchar), [0xFF, 0xFE, 0, 0] ));
-    register( new StreamBOM("UTF-32BE", BOM.UTF32BE, Endian.bigEndian, typeid(dchar), [0, 0, 0xFF, 0xFE] ));
+    register( new FileBOM("UTF-32LE", BOM.UTF32LE, Endian.littleEndian, typeid(dchar), [0xFF, 0xFE, 0, 0] ));
+    register( new FileBOM("UTF-32BE", BOM.UTF32BE, Endian.bigEndian, typeid(dchar), [0, 0, 0xFF, 0xFE] ));
 }
 
 /// add  ByteOrderMark signatures
-void register(StreamBOM bome)
+void register(FileBOM bome)
 {
-    gStreamBOM[bome.bomEnum] = bome;
+    gFileBOM[bome.bomEnum] = bome;
 }
 
 BomArray getBomBytes(intptr_t marktype)
 {
-    auto psb = marktype in gStreamBOM;
+    auto psb = marktype in gFileBOM;
     return (psb is null) ? null : (*psb).bomBytes;
 }
 
@@ -112,14 +124,112 @@ BomArray getBomBytes(intptr_t marktype)
     Assume nothing about data length or bom lengths.
 */
 
-StreamBOM stripBOM(ref ubyte[] data)
+/**
+ * Read beginning of a block stream, and return what appears to
+ * be a valid ByteOrderMark class describing the characteristics of any
+ * BOM found.   If there is no BOM, the instance ByteOrderRegistry.noMark will
+ * be returned, describing a UTF8 stream, system endian, with empty BOM array,
+ * and character size of 1.
+ *
+ * The buffer array will hold all values in stream sequence, that were read by the
+ * function after reading the BOM. If no BOM was recognized the buffer array contains
+ * all the values currently read from the stream. The number of bytes in buffer
+ * will be a multiple of the number of bytes in the detected character size of the stream
+ * (ByteOrderMark.charSize). If end of stream is encountered or an exception occurred
+ * the eosFlag will be true.
+ *
+ */
+ByteOrderMark readBOM(File s, ref ubyte[] result, out bool eosFlag)
 {
-    auto boms = gStreamBOM.values[];
+    ubyte[1]		test;
+	ubyte[]		bomchars;
+
+
+    ByteOrderMark[] goodList = ByteOrderRegistry.list.dup;
+    ByteOrderMark[] fullMatch;
+
+    auto goodListCount = goodList.length;
+    ByteOrderMark found = null;
+    try
+    {
+        eosFlag = false;
+        int  readct = 0;
+
+        while (goodListCount > 0)
+        {
+            s.rawRead(test);
+            readct++;
+            bomchars ~= test;
+            foreach(gx , bm ; goodList)
+            {
+                if (bm !is null)
+                {
+                    auto marklen = bm.bom.length;
+                    if (readct <= marklen)
+                    {
+                        if (test[0] != bm.bom[readct-1])
+                        {
+                            // eliminate from array
+                            goodList[gx] = null;
+                            goodListCount--;
+                        }
+                        else if (readct == marklen)
+                        {
+                            fullMatch ~= bm;
+                            goodList[gx] = null;
+                            goodListCount--;
+                        }
+                    }
+                }
+            }
+        }
+        if (fullMatch.length > 0)
+        {
+            // any marks fully matched ?
+            found = fullMatch[0];
+            for(size_t fz = 1; fz < fullMatch.length; fz++)
+            {
+                if (found.bom.length < fullMatch[fz].bom.length)
+                    found = fullMatch[fz];
+            }
+        }
+        else
+        {
+            found = ByteOrderRegistry.noMark;
+        }
+
+        // need to read to next full charSize to have at least 1 valid character
+        //bool validChar = true;
+        while ((bomchars.length - found.bom.length) % found.charSize != 0)
+        {
+            s.rawRead(test);
+            bomchars ~= test;
+        }
+        // return remaining valid characters read as ubyte array
+        result = bomchars[found.bom.length .. $];
+        return found;
+    }
+    catch(Exception re)
+    {
+        if (bomchars.length == 0)
+        {
+            result.length = 0;
+            eosFlag = true;
+            return ByteOrderRegistry.noMark;
+        }
+    }
+
+    result = bomchars;
+    return ByteOrderRegistry.noMark;
+}
+FileBOM stripBOM(ref ubyte[] data)
+{
+    auto boms = gFileBOM.values[];
     auto bmct = boms.length;
     auto bpos = 0;
 
-    StreamBOM vb;
-	StreamBOM lastMatch = gNoBOMMark;
+    FileBOM vb;
+	FileBOM lastMatch = gNoBOMMark;
     while(true)
     {
         if (bpos < data.length)
@@ -223,25 +333,26 @@ immutable(T)[] toArray(T)(const(char)[] c)
 	}
 }
 /// Using character type indicator, Read entire file as UTF string, wstring or dstring, return BOM enum or -1 if UTF8 default
-immutable(T)[] readTextBom(T)(string filename, ref int bomMark)
+immutable(T)[]
+readFileBom(T)(string filename, ref int bomMark)
 {
     bomMark = -1;
-    std.stream.File f = new std.stream.File();
-	f.open(filename,FileMode.In);
+    std.stdio.File f = std.stdio.File();
+	f.open(filename,"r");
 	ubyte[] raw;
 
 	if (f.isOpen)
 	{
 	    scope(exit)
             f.close();
-        auto bufSize = f.available();
+        auto bufSize = f.size();
         if (bufSize ==  0)
            return null;
         raw = new ubyte[bufSize];
-        f.readBlock(raw.ptr, bufSize);
+        f.rawRead(raw);
 	}
 
-    StreamBOM bom = stripBOM(raw);
+    FileBOM bom = stripBOM(raw);
     bomMark = bom.bomEnum;
 
     switch(bomMark)
@@ -318,6 +429,7 @@ wchar[] fromBigEndian16(ubyte[] src)
         return cast(wchar[]) src;
     }
 }
+
 
 wchar[] fromLittleEndian16(ubyte[] src)
 {
@@ -424,42 +536,44 @@ string backupOldFile(string file)
 /** Create file and prepend Bom bytes to file data  */
 void writeFileWithBOM (string file, BomString data, intptr_t bomMark)
 {
-    File fs = new File(file,FileMode.Out);
+    auto fs = File(file,"w");
     ubyte[] raw;
     if (bomMark >= 0)
     {
         auto tattoo = getBomBytes(bomMark);
         final switch(cast(BOM)bomMark)
         {
+        case BOM.NONE:
+             assert(0);
         case BOM.UTF8:
-            auto cstr = data.get!strmc;
+            auto cstr = data.get!(char[]);
             raw = cast(ubyte[])cstr;
             break;
         case BOM.UTF16LE:
-            auto wstr = data.get!strmw;
+            auto wstr = data.get!(wchar[]);
             raw = toLittleEndian16(wstr);
             break;
         case BOM.UTF16BE:
-            auto wstr = data.get!strmw;
+            auto wstr = data.get!(wchar[]);
             raw = toBigEndian16(wstr);
             break;
         case BOM.UTF32LE:
-            auto dstr = data.get!strmd;
+            auto dstr = data.get!(dchar[]);
             raw = toLittleEndian32(dstr);
             break;
         case BOM.UTF32BE:
-            auto dstr = data.get!strmd;
+            auto dstr = data.get!(dchar[]);
             raw = toBigEndian32(dstr);
             break;
         }
-        fs.writeBlock(tattoo.ptr, tattoo.length);
-        fs.writeBlock(raw.ptr,raw.length);
+        fs.rawWrite(tattoo);
+        fs.rawWrite(raw);
     }
     else
     {
         auto cstr = data.get!strmc;
         raw = cast(ubyte[])cstr;
-        fs.writeBlock(raw.ptr,raw.length);
+        fs.rawWrite(raw);
     }
     fs.close();
 }

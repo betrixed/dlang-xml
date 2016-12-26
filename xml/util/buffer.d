@@ -17,16 +17,16 @@ module xml.util.buffer;
 import std.utf;
 import std.string;
 import std.stdio;
-import std.stream;
+
 import std.stdint;
 import std.traits;
-import std.c.string;
+import core.stdc.string;
 import std.conv;
 import std.variant;
 import std.exception;
 import std.algorithm;
 import std.ascii;
-private import std.c.stdlib;
+private import core.stdc.stdlib;
 private import core.memory;
 
 /// May be thrown by some index checks inside Buffer(T)
@@ -76,7 +76,7 @@ uintptr_t removeInit(T)(T[] items, uintptr_t pos = 0)
 
 	if (dp is null || items.length == 0)
 		return 0;
-	
+
 	auto ok = dp + pos;
 	auto end = dp + items.length;
 	while ( (ok < end) && (*ok !is T.init) )
@@ -98,7 +98,7 @@ uintptr_t removeInit(T)(T[] items, uintptr_t pos = 0)
 
 /// The speed up for using the Buffer class over plain T[] is something like 8/3 or 2.6 times
 /// At least this the ratio noted in the XmlParser for a short XML document.
-/// Using T[] always triggers a reallocation every time length is set to zero. 
+/// Using T[] always triggers a reallocation every time length is set to zero.
 /// A T[] cannot be reset and reused as is, which defeats the purpose of having a capacity.
 /// Such reallocations also increase possibility of hardware cache misses.
 /// std.array Appender is another possibility, but it is not a drop in replacement for T[]
@@ -272,7 +272,7 @@ struct Buffer(T)
 		if (ptr_ && (x < length_))
 		{
 			static if (!isScalarType!(T))// else already marked as having no pointers
-			{	
+			{
 				destroy_data(ptr_+x, length_ - x);
 			}
 			length_ = x;

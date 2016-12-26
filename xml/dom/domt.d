@@ -27,7 +27,7 @@ import core.stdc.string;
 import xml.txml;
 import xml.xmlOutput;
 import xml.xmlAttribute;
-import std.stream;
+
 import std.exception;
 import xml.xmlError;
 
@@ -271,7 +271,7 @@ public:
     }
 
 	/**
-	Pre-emptive strike to devastate object, and possibly delete at same tile.
+	Pre-emptive strike to devastate object, and possibly delete at same NStile.
 	Destructor, must call with del false, and ideally explode can tell,
 	if its job is already done.
 	*/
@@ -648,7 +648,7 @@ public:
 };
 
 /// DOM accessible parts of DTD, just entities and notations.
-class DocumentType  : ChildNode 
+class DocumentType  : ChildNode
 {
 package:
     XmlString	publicId;
@@ -797,7 +797,7 @@ public:
     }
 
 
-    override XmlString toXmlString()  const 
+    override XmlString toXmlString()  const
     {
         return XMLOutput!T.makeXmlProcessingInstruction(id_,data_);
     }
@@ -805,7 +805,7 @@ public:
 }
 
 /// Essential DOM component
-class Document  : Node 
+class Document  : Node
 {
     DocumentType	dtd_;
     Element			docElement_;
@@ -1496,7 +1496,7 @@ public:
 	{
 		auto oldItems = items_;
 		items_ = [];
-	
+
 		foreach(n ; oldItems)
 		{
 			n.explode();
@@ -1982,7 +1982,7 @@ struct ElemAttributeMap
 };
 
 /// Binds the document tree together.
-class Element :  ChildNode 
+class Element :  ChildNode
 {
 	version(GC_STATS)
 	{
@@ -2050,7 +2050,7 @@ public:
     {
         return children_.firstChild_ !is null;
     }
-	
+
 	void countLeaves(ref ulong count)
 	{
 		count++;
@@ -2293,7 +2293,7 @@ public:
         return app.idup;
     }
 
-	/// Take tree apart.  For work of navigating entire tree, might as 
+	/// Take tree apart.  For work of navigating entire tree, might as
 	/// delete as well.  Used parts of tree should be removed before calling this.
 	override void explode()
 	{
@@ -2854,7 +2854,7 @@ public:
     XmlString externalSource() const
     {
         Buffer!T result;
-		
+
 		result.reserve(publicId_.length + systemId_.length+ 6);
 
         void addqt(XmlString n, XmlString v)
@@ -2896,7 +2896,7 @@ public:
     {
 		super(name);
 		value_ = value;
-		isNData_ = isNData;	
+		isNData_ = isNData;
     }
 
     override XmlString getNodeValue()
@@ -2996,7 +2996,7 @@ void printLinked(Node n, PrintDom tp)
         case NodeType.Comment_node:
             if (!tp.noComments)
                 tp.putIndent(n.toXmlString());
-			break; 
+			break;
         case NodeType.CDATA_Section_node:
             tp.putIndent(n.toXmlString());
             break;
@@ -3119,7 +3119,7 @@ version(GC_STATS)
     {
 		version(GC_STATS)
 			gcStatsSum.dec();
-    }	
+    }
 	void explode()
 	{
 		if (nsdefs_ !is null)

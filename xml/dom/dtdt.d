@@ -39,7 +39,7 @@ template XMLDTD(T)
 	else
 		alias std.conv.dtext concats;
 
-	
+
 
 	alias   immutable(T)[]	XmlString;
     alias   T[]	XmlBuffer;
@@ -205,8 +205,8 @@ template XMLDTD(T)
 		{
 			id = name;
 			//desc_ = desc;
-		}	
-			
+		}
+
 		 final bool isPCDataOnly() @property const
 		 {
 			 return (!hasElements && hasPCData);
@@ -477,7 +477,7 @@ template XMLDTD(T)
 
 
 	/// A single element name in a declaration list
-	package class ChildId
+    class ChildId
 	{
 		XmlString	id;
 		ChildOccurs occurs;
@@ -560,14 +560,14 @@ template XMLDTD(T)
 		}
 	}
 
-	package enum FelType
+    enum FelType
 	{
 			fel_listbegin,
 			fel_listend,
 			fel_element
 	}
 
-	package struct FelEntry
+    struct FelEntry
 	{
 		FelType  fel;
 		ChildId	 item;

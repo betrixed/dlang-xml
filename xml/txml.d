@@ -10,7 +10,7 @@ import std.conv;
 import xml.xmlChar;
 import xml.xmlError;
 import xml.xmlAttribute;
-
+import std.ascii;
 version(GC_STATS)
 	import xml.util.gcstats;
 
@@ -105,12 +105,12 @@ template xmlt(T) {
 	static const XmlString xmlNamespaceURI = "http://www.w3.org/XML/1998/namespace";
 	static const XmlString xmlnsURI = "http://www.w3.org/2000/xmlns/";
 
-	//alias T[] XmlBuffer; // this has performance slow down due to GC heap interactions 
-	//alias Appender!(T[]) XmlBuffer; // still a bit slow - for what reasons I don't care to figure out 
+	//alias T[] XmlBuffer; // this has performance slow down due to GC heap interactions
+	//alias Appender!(T[]) XmlBuffer; // still a bit slow - for what reasons I don't care to figure out
 	alias Buffer!T XmlBuffer; // about 30% faster than Appender. Does not scrub on shrink
 	alias XMLAttribute!T.XmlAttribute	XmlAttribute;
 	alias XMLAttribute!T.AttributeMap   AttributeMap;
-	
+
 	void remove(ref AttributeMap attr, XmlString key)
 	{
 	}
@@ -230,7 +230,7 @@ template xmlt(T) {
 		void notation(Object n);				// Notation entity data reference
 		/// currently up to StdEventSize , ie XmlDeclaration last eventId
 		/// just return the entity name, not decoded
-		
+
 		void setErrorHandler(IXmlErrorHandler eh);
 	}
 
@@ -252,7 +252,7 @@ template xmlt(T) {
 		/// currently up to StdEventSize , ie XmlDeclaration last eventId
 		/// just return the entity name, not decoded
 		void entityName(const(T)[] s,bool inAttribute){}
-		
+
 		void setErrorHandler(IXmlErrorHandler eh){
 			errorHandler_ = eh;
 		}

@@ -57,7 +57,7 @@ void fullCollect()
 	getchar();
 }
 
-import std.stream;
+import std.file;
 
 void StdXmlRun( string input)
 {
@@ -238,7 +238,7 @@ void runTests(string inputFile, uintptr_t runs)
 {
 	int bomMark = -1;
 
-    auto s = readTextBom!char(inputFile, bomMark);
+    auto s = readFileBom!char(inputFile, bomMark);
 
 	simpleBookLoad(s);
 	testValidate(s);

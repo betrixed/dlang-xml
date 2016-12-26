@@ -1,10 +1,12 @@
 module xml.xmlParser;
 
-import std.stdint;
-import xml.xmlChar, std.variant, std.string, std.conv, std.utf, std.traits;
-import xml.txml, xml.xmlAttribute, xml.xmlError, xml.textInput, xml.util.read;
+
+import std.stdio, std.stdint;
+import std.ascii, std.variant, std.string, std.conv, std.utf, std.traits;
+import xml.xmlChar, xml.txml;
+import xml.xmlAttribute, xml.xmlError, xml.textInput, xml.util.read;
 import xml.dom.dtdt;
-import std.path, std.stream, std.range;
+import std.path, std.file, std.range;
 import std.format;
 import xml.util.gcstats;
 import xml.util.buffer;
@@ -18,7 +20,7 @@ private enum BBCount { b1, b2, bend };
 /// It is hard to separate the parser from concrete data structures of a DOM
 /// but possible because the basic XML structure is regular
 /// In particular, clustered complexities like a DTD require intricate and specific object relationships
-/// with special rules. The idea of EntityData, 
+/// with special rules. The idea of EntityData,
 /// or reuseable segments of XML which are specified in a DTD, is particularly
 /// an implementation headache.
 
@@ -56,7 +58,7 @@ class XmlParser(T)  {
 	{
 		return this;
 	}
-	
+
 	alias xmlt!T.XmlString  XmlString;
 	alias xmlt!T.XmlBuffer	XmlBuffer;
 
@@ -109,7 +111,7 @@ class XmlParser(T)  {
 		bool				empty  = true;
 
 		double				docVersion_;
-		
+
 		//Buffer!dchar		backStack;	 // oops wrong way buffer
 		dchar[]				backStack_;
 		// a single block of unparsed xml
@@ -131,7 +133,7 @@ class XmlParser(T)  {
 
 
 
-		this(EntityData ed = null, bool doPop = false)
+		this(EntityData ed, bool doPop = false)
 		{
 			entity = ed;
 			scopePop = doPop;
@@ -259,7 +261,7 @@ class XmlParser(T)  {
 			if (slicing_)
 			{
 				// Assume exact reverse with check for character
-				
+
 				if (mpos > 0)
 				{
 					fpos = mpos;
@@ -280,14 +282,14 @@ class XmlParser(T)  {
 								unpopMalfunction();
 							fpos--;
 							dchar w16 = sliceData_[fpos];
-							if (w16 < 0xD800 || w16 >= 0xE000) 
+							if (w16 < 0xD800 || w16 >= 0xE000)
 								break; // as-is character
 							// its a surrogate pair, so needs to be two of them
 							if (fpos == 0)
 								unpopMalfunction();
 							fpos--;
 							w16 = sliceData_[fpos];
-							if (w16 >= 0xD800 && w16 < 0xE000) 
+							if (w16 >= 0xD800 && w16 < 0xE000)
 								break; // ready for decode
 							unpopMalfunction();
 						}
@@ -310,8 +312,8 @@ class XmlParser(T)  {
 				front = makeFront;
 				empty = false;
 				return;
-				
-			} // working through dchar[] 
+
+			} // working through dchar[]
 			else if (( fpos > 0) && (fpos <= streamData_.length) && (streamData_[fpos-1]==front))
 			{
 				fpos--;
@@ -471,10 +473,10 @@ class XmlParser(T)  {
 					default:
 						// already approved 0x9, 0xA, 0xD,  0x20 - 0x7F, 0x85
 						immutable isSourceCharacter
-							=   (c <= 0xD7FF) 
+							=   (c <= 0xD7FF)
 							?  (c > 0x9F) || ((filterVersion_==1) && (c >= 0x20))
 							: ((c >= 0xE000) && (c <= 0xFFFD)) || ((c >= 0x10000) && (c <= 0x10FFFF)) ;
-							
+
 
 						if (!isSourceCharacter)
 						{
@@ -659,20 +661,20 @@ class XmlParser(T)  {
 		// Buffers
 
 		XmlBuffer 	bufNormAttr_, bufAttr_, bufTag_, bufEndTag_,bufMatch_, bufContent_;
-		
+
 		AttributeMap     		attributes_;
 		XmlEvent     		    results_;
 
 		StringType[StringType]	charEntity;
 		XmlContext[]     	contextStack_;
-		
+
 
 		DocTypeData			dtd_;
 		intptr_t			itemCount;
 		uintptr_t			attributeCount;
 
 		// manage own primary source
-		BufferFill!(dchar)	fillSource_;
+		ReadBuffer!(dchar)	fillSource_;
 		ulong				fillPos_;
 		int					bomMark_;
 		// introduced for the DOCTYPE
@@ -684,7 +686,7 @@ class XmlParser(T)  {
 		}
 
 		/// assign a dchar buffer filling primary source
-		public void fillSource(BufferFill!dchar src) @property
+		public void fillSource(ReadBuffer!dchar src) @property
 		{
 			fillSource_ = src;
 			initSource(&fillData);
@@ -692,7 +694,7 @@ class XmlParser(T)  {
 		// read the data in a block, translate if necessary to T.
 		public void sliceFile(string srcPath)
 		{
-			auto s = readTextBom!T(srcPath,bomMark_);
+			auto s = readFileBom!T(srcPath,bomMark_);
 			auto xml = (cast(immutable(T)*) s.ptr)[0..s.length];
 			addSystemPath(normalizedDirName(srcPath));
 			initSource(xml);
@@ -701,8 +703,8 @@ class XmlParser(T)  {
 		// called from doXmlDeclaration
 		void setXmlVersion(double value)
 		{
-			// Tricky. If 
-			
+			// Tricky. If
+
 			if ((value != 1.0) && (value != 1.1))
 			{
 				uint major = cast(uint) value;
@@ -716,9 +718,9 @@ class XmlParser(T)  {
 					throw errors_.makeException(format("Entity version %s > Document version %s", docVersion_, parentVersion_), XmlErrorLevel.FATAL);
 				filterVersion_ = parentVersion_;
 			}
-			else 
+			else
 				filterVersion_ = docVersion_;
-			
+
 			minVersion11_ = (filterVersion_ > 1.0);
 
 			if (minVersion11_)
@@ -763,7 +765,7 @@ class XmlParser(T)  {
 			}
 			return false;
 		}
-		
+
 		final bool getXmlName(ref XmlBuffer ename)
 		{
 			if (empty)
@@ -1614,7 +1616,7 @@ class XmlParser(T)  {
 			deviantData_ = false;
 			return;
 		}
-		
+
 		string unknownEntityMsg(const(T)[] ename)
 		{
 			return format("Unknown Entity %s",ename);
@@ -2126,7 +2128,7 @@ class XmlParser(T)  {
 	{
 		errors_ = pdata;
 	}
-	
+
 	@property IXmlErrorHandler errorHandler()
 	{
 		return errors_;
@@ -2313,7 +2315,7 @@ class XmlParser(T)  {
 			}
 			return true;
         }
-		else 
+		else
 			errors_.checkErrorStatus();
 		return false;
     }
@@ -3324,7 +3326,7 @@ class XmlParser(T)  {
 				throw errors_.makeException(format("parameter entity not allowed in internal subset: %s",pname));
 			}
 			StringSet eset;
-			
+
 			EntityData ed = getParameterEntity(pname, eset, isValue);
 
 			if (ed is null)
@@ -3443,7 +3445,7 @@ class XmlParser(T)  {
 						auto note = dtd_.notationMap.get(ndata_name,null);
 						if (note is null)//not-wf-sa-083
 							throw errors_.makeException(format("No notation named %s", ndata_name));
-						
+
 						*/
 					}
 				}
@@ -4295,8 +4297,8 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto s = new BufferedFile(uri);
-		auto sf = new XmlStreamFiller(s);
+		auto s = File(uri);
+		auto sf = new XmlFileReader(s);
 		ulong	pos;
 
 		scope(exit)
@@ -4313,7 +4315,7 @@ class XmlParser(T)  {
         ep.frontFilterOn();
 		ep.dtd_ = dtd_;
 		ep.isStandalone_ = false;
-		
+
 		bool wasInternal = dtd_.isInternal_;
 		dtd_.isInternal_ = false;
 		scope(exit)
@@ -4351,7 +4353,7 @@ class XmlParser(T)  {
         paths ~= systemPaths_;
         ep.systemPaths_ = paths;
 
-		
+
 		return ep;
 	}
 	// Set up a new parser, using same IXMLEvents. Use current Xml version
@@ -4372,8 +4374,8 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto s = new BufferedFile(uri);
-		auto sf = new XmlStreamFiller(s);
+		auto s = File(uri);
+		auto sf = new XmlFileReader(s);
 		ulong	pos;
 
 		scope(exit)
@@ -4697,7 +4699,7 @@ class XmlParser(T)  {
                 {
                     throw errors_.makeException("Expected attribute type in ATTLIST");
                 }
-				
+
                 AttributeType*  patte = keyword in AttributeDef.stdAttTypeList;
 
                 if (patte is null)
@@ -4764,7 +4766,7 @@ class XmlParser(T)  {
                             {
                                 throw errors_.makeException("space required before value");
                             }
-	
+
                             unquoteValue(keyword);
                             adef.values ~= keyword;
                             adef.defaultIndex = cast(int) adef.values.length - 1;

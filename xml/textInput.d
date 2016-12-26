@@ -21,13 +21,13 @@ import xml.util.inputEncode;
 //import xml.parseitem;
 import std.stdint;
 import std.utf;
-import std.stream;
+
 import std.string;
 import std.conv;
 import std.array;
 import std.range;
 import std.concurrency, std.socket;
-
+import xml.util.bomstring;
 debug {
 	import std.stdio;
 }
@@ -398,7 +398,10 @@ if (isDynamicArray!A)
     }
 }
 
-class BufferFill(T)
+/**
+    Abstract class template of ReadBuffer
+*/
+class ReadBuffer(T)
 {
 protected:
     bool eof_; // Just had LAST FILL!
@@ -430,7 +433,7 @@ public:
 /**
 
 Data is provided from any source by the $(D MoreDataDgate).
-An optional $(I EmptyNotify) delegate is called if the BufferFill!(T) returns false.
+An optional $(I EmptyNotify) delegate is called if the InputFileBuffer!(T) returns false.
 Data can be pushed back onto an input stack.
 The input stack is used up first before the primary source.
 This implementation takes the step of having popFront set the
@@ -451,7 +454,7 @@ InputCharRange mostly ignores UTF encoding.
 class InputCharRange(T)
 {
     /// Delegate to refill the buffer with data,
-    alias BufferFill!(T)	DataFiller;
+    alias ReadBuffer!(T)	DataFiller;
     /// Delegate to notify when empty becomes true.
     alias void delegate() EmptyNotify;
 
@@ -816,7 +819,7 @@ struct ParseInputRange(T)
 /**
 	Take as input source a D string
 */
-class SliceFill(T) :  BufferFill!(dchar)
+class SliceFill(T) :  ReadBuffer!(dchar)
 {
 protected:
     const(T)[]		src_;
@@ -915,7 +918,7 @@ public:
 
 
 
-class StreamFill(T) :  BufferFill!(T)
+class FileReader(T) :  ReadBuffer!(T)
 {
 	version (GC_STATS)
 	{
@@ -927,8 +930,8 @@ class StreamFill(T) :  BufferFill!(T)
 	}
 
 
-    Stream  s_; // InputStream does not have seek
-    ubyte[] data_; // Standard stream is a bastard with endian swapping.
+    File  s_; //
+    ubyte[] data_; // raw buffer
 
     enum { INTERNAL_BUF = 4096 / T.sizeof }
 
@@ -939,17 +942,17 @@ class StreamFill(T) :  BufferFill!(T)
         {
             data_ = new ubyte[INTERNAL_BUF];
         }
-        refPos = s_.position / T.sizeof; // reference in character units
+        refPos = s_.tell() / T.sizeof; // reference in character units
 
-        size_t didRead = s_.read(data_);
-        if (didRead > 0)
+        auto didRead = s_.rawRead(data_);
+        if (didRead.length > 0)
         {
-            fillme = (cast(T*) data_.ptr)[0..didRead / T.sizeof];
+            fillme = (cast(T*) data_.ptr)[0..didRead.length / T.sizeof];
             return true;
         }
         return false;
     }
-    this(Stream ins)
+    this(File ins)
     {
         super();
         s_ = ins;
@@ -967,9 +970,9 @@ class StreamFill(T) :  BufferFill!(T)
 
 /// Connection of raw streams (data buffer fillers) to decoding InputRange
 
-alias	StreamFill!(char) CharFiller;
-alias	StreamFill!(wchar)  WCharFiller;
-alias	StreamFill!(dchar)  DCharFiller;
+alias	FileReader!(char)   CharFiller;
+alias	FileReader!(wchar)  WCharFiller;
+alias	FileReader!(dchar)  DCharFiller;
 
 alias	InputCharRange!(char) CharIR;
 alias	InputCharRange!(wchar) WCharIR;
@@ -981,11 +984,11 @@ alias RecodeDChar!(DCharIR)	Recode32;
 
 /// Big complicated class to provide a single interface to different kinds of encoded inputs.
 
-class XmlStreamFiller :  BufferFill!(dchar)
+class XmlFileReader :  ReadBuffer!(dchar)
 {
     // inherit ParseInput so can use buffer and pointer to member function type
 
-    Stream		rawStream;
+    File		        rawStream;
 
     uint				nextBufferSize_;
     bool				checkedBom_;
@@ -1019,7 +1022,7 @@ class XmlStreamFiller :  BufferFill!(dchar)
     }
 
 public:
-    this(Stream s)
+    this(File s)
     {
         rawStream = s;
         init();
@@ -1159,7 +1162,7 @@ private:
 		bufferManage.reserve(LARGE_BUFFER_SIZE);
 		buffer_ = bufferManage.data();
 
-        bom_ = readStreamBOM(rawStream, preload, eofFlag_);
+        bom_ = readBOM(rawStream, preload, eofFlag_);
         if (eofFlag_ && (preload.length == 0))
         {
             return false;
@@ -1316,7 +1319,7 @@ private:
 /// the receive blocks until sent a string.  Designed for server based on listener.d example
 
 
-class AsyncFill : BufferFill!(dchar)
+class AsyncFill : ReadBuffer!(dchar)
 {
 	//Buffer!(dchar[])		source;
 	const(char)[]				source;

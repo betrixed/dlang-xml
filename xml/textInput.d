@@ -1087,11 +1087,11 @@ public:
 
 
     /// Setup the correct conversion function for the encoding, check for source BOM compatibility.
-    override bool setEncoding(string encoding)
+    override bool setEncoding(string encName)
     {
         if (bom_ !is null) // always true?
         {
-            string uenc = encoding.toUpper();
+            string uenc = encName.toUpper();
             // a switch in coding must be compatible with current bom?
             if (uenc == bom_.key.codeName)
             {
@@ -1101,7 +1101,7 @@ public:
             {
                 if (bom_ != ByteOrderRegistry.noMark)
                 {
-                    throw encodingInvalid(bom_.key.toString(), encoding);
+                    throw encodingInvalid(bom_.key.toString(), encName);
                 }
             }
         }
@@ -1110,31 +1110,32 @@ public:
         {
         case 1:
         {
-            auto test1 = Recode8.getRecodeFunc(encoding);
+            auto test1 = Recode8.getRecodeFunc(encName);
             if (test1 is null)
-                throw encodingNotFound(selector_,encoding);
+                throw encodingNotFound(selector_,encName);
             charDo_ = test1;
         }
         break;
         case 2:
         {
-            auto test2 = Recode16.getRecodeFunc(encoding);
+            auto test2 = Recode16.getRecodeFunc(encName);
             if (test2 is null)
-                throw encodingNotFound(selector_,encoding);
+                throw encodingNotFound(selector_,encName);
             wcharDo_ = test2;
         }
         break;
         case 4:
         {
-            auto test4 = Recode32.getRecodeFunc(encoding);
+            auto test4 = Recode32.getRecodeFunc(encName);
             if (test4 is null)
-                throw encodingNotFound(selector_,encoding);
+                throw encodingNotFound(selector_,encName);
             dcharDo_ = test4;
         }
         break;
         default:
             return false;
         }
+		this.encoding_ = encName;
         return true;
     }
 
@@ -1254,25 +1255,20 @@ private:
     {
         posRef = cir_.sourceReference();
         uintptr_t i = 0;
-        try
+
+        while(i < buffer.length)
         {
-            while(i < buffer.length)
+            if (!charDo_(cir_,buffer[i]))
             {
-                if (!charDo_(cir_,buffer[i]))
-                {
-                    if (cir_.empty && (i > 0))
-					{
-                        eof_ = true;
-					}
-                    break;
-                }
-				i++;
+                if (cir_.empty && (i > 0))
+				{
+                    eof_ = true;
+				}
+                break;
             }
+			i++;
         }
-        catch (CharSequenceError ex)
-        {
-            throw recodeFailed(posRef + i, ex.toString());
-        }
+      
         return i;
     }
 

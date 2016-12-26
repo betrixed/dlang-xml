@@ -11,6 +11,7 @@ import std.format;
 import xml.util.gcstats;
 import xml.util.buffer;
 import xml.util.bomstring;
+import xml.util.inputEncode;
 
 version = ParseDocType;
 
@@ -37,6 +38,8 @@ class XmlParser(T)  {
 		}
     }
 	private {
+		string				xmlEncoding_;
+
 		bool				validate_;
 		bool				isStandalone_;
 		bool				namespaceAware_;
@@ -51,6 +54,7 @@ class XmlParser(T)  {
 		bool				deviantData_; // sliced data run was broken
 		bool				inCharData;
 		bool				eventMode_; // results by events
+		
 		BBCount				bbct;
 	}
 
@@ -146,7 +150,9 @@ class XmlParser(T)  {
     {
         P_PROLOG, // default, initial state
         P_INT_DTD,
-		P_DATA,
+		P_CONTENT, // Content and element alternate
+		P_ELEMENT,
+		P_END_TAG,
         P_EPILOG,
         P_END
     }
@@ -730,9 +736,6 @@ class XmlParser(T)  {
 			}
 		}
 
-
-
-
 		final bool isNameStartFifthEdition(dchar test)
 		{
 			if (docVersion_ == 1.0 && maxEdition >= 5)
@@ -929,33 +932,41 @@ class XmlParser(T)  {
 
 			if (namespaceAware_ && (indexOf(target,':') >= 0))
 				throw errors_.makeException(format(": in process instruction name %s for namespace aware parse",target));
-
+			
 			if (target == "xml")
 			{
+				Exception badThrow = null;
+
 				if (inDTD_)
 					throw errors_.makeException("Xml declaration may not be in DTD");
-				if (state_ != PState.P_PROLOG || (spaceCt > 0) || (itemCount > 0))
+				if (state_ > PState.P_PROLOG || (spaceCt > 0) || (itemCount > 0))
 					throw errors_.makeException("xml declaration should be first");
+				
 				if (!hasDeclaration)
 				{
 					hasDeclaration = true;
-					try
-					{
+					
+					/*try
+					{*/
 						doXmlDeclaration();
 						munchSpace();
 						return;
-					}
+					/*}
 					catch (XmlError xm)
-					{
-						throw errors_.caughtException(xm, xm.level);
+					{	
+						auto s = xm.toString();
+						badThrow = errors_.preThrow(new XmlError(s, xm.level));
 					}
 					catch (Exception ex)
 					{
-						throw errors_.caughtException(ex);
-					}
+						badThrow = errors_.preThrow(new XmlError(ex.msg));
+					}*/
 				}
 				else
-					throw errors_.makeException("Duplicate xml declaration");
+					badThrow = errors_.makeException("Duplicate xml declaration");
+
+				if (badThrow !is null)
+					throw badThrow;
 			}
 			auto lcase = target.toLower();
 
@@ -1079,7 +1090,6 @@ class XmlParser(T)  {
 									}
 								}
 								elementDepth++;
-								state_ = PState.P_DATA; // into the document proper
 								stateDg_ = &doContent;
 								doStartTag();
 								return;
@@ -1183,7 +1193,10 @@ class XmlParser(T)  {
 			{
 				stateDg_ = &doEpilog;
 				state_ = PState.P_EPILOG;
-			} // else?
+			} 
+			else {
+				state_ = PState.P_CONTENT;
+			}
 			if (elementDepth < 0)
 				throw errors_.makeException(XmlErrorCode.ELEMENT_NESTING);
 		}
@@ -1341,11 +1354,16 @@ class XmlParser(T)  {
 				events_.declaration(results_);
 
 			//TODO: Event call
-			state_ = PState.P_DATA;
+			state_ = PState.P_ELEMENT;
 			stateDg_ = &doContent;
 			itemCount++;
 		}
 
+		// return parsed encoding
+		string getXmlEncoding()
+		{
+			return xmlEncoding_;
+		}
 		/// Chicken and egg. Start off by not knowing encoding, except by BOM
 		/// After reading coding declaration, may need to change the source processing.
 		/// Do by events call back?  Throw and catch own exception?
@@ -1364,9 +1382,10 @@ class XmlParser(T)  {
 			try
 			{
 				// encoding stuff in dchar ?
-				errors_.setEncoding(encoding);
-				if (fillSource_)
-					fillSource_.setEncoding(to!string(encoding));
+				// errors_.setEncoding(encoding);
+				xmlEncoding_ = to!string(encoding);
+				if (fillSource_ !is null)
+					fillSource_.setEncoding(xmlEncoding_);
 			}
 			catch (XmlError ex)
 			{
@@ -1407,7 +1426,7 @@ class XmlParser(T)  {
 		/// already got a '</' and put it back expecting a Name>
 		final void doEndTag()
 		{
-			state_ = PState.P_DATA;
+			state_ = PState.P_END_TAG;
 			dchar  test;
 			if (getXmlName(tag_))
 			{
@@ -1428,6 +1447,7 @@ class XmlParser(T)  {
 				}
 				if (eventMode_)
 					events_.endTag(results_);
+
 				return;
 			}
 			throw errors_.makeException("end tag expected");
@@ -1435,6 +1455,7 @@ class XmlParser(T)  {
 		// called if getXmlName(bufTag_)
 		final void doStartTag()
 		{
+			state_ = PState.P_ELEMENT;
 			int attSpaceCt = 0;
 			auto attrCount = 0;
 			attributes_.reset();
@@ -1578,9 +1599,6 @@ class XmlParser(T)  {
 								}
 							}
 							/// TODO: actually implement space instructions?
-
-
-
 						}
 						attributes_.push(Attribute(attrName_,attrValue_));
 
@@ -1624,6 +1642,7 @@ class XmlParser(T)  {
 
 		final void doContent()
 		{
+			state_ = PState.P_CONTENT;
 			bufContent_.shrinkTo(0);
 			inCharData = false;
 			frontFilterOn();
@@ -1674,6 +1693,7 @@ class XmlParser(T)  {
 							{
 								elementDepth++;
 								doStartTag();
+								state_ = PState.P_CONTENT;
 								break;
 							}
 							else
@@ -1826,6 +1846,8 @@ class XmlParser(T)  {
 			}
 			state_ = PState.P_END;
 			stateDg_ = null;
+			if (fillSource_)
+				destroy(fillSource_);
 		}
 
 		/** got a <! and put it back */
@@ -2149,15 +2171,56 @@ class XmlParser(T)  {
 		empty = false;
 		popFront();
 	}
+
+	final string stageString()
+	{
+		final switch(state_){
+			case PState.P_PROLOG:
+				return "Prolog";
+			case PState.P_INT_DTD:
+				return "Internal DTD";
+			case PState.P_ELEMENT:
+				return "Element";
+			case PState.P_END_TAG:
+				return "End Tag";
+			case PState.P_CONTENT:
+				return "Content";
+			case PState.P_EPILOG:
+				return "Epilog";
+			case PState.P_END:
+				return "End";
+		}
+	}
+
+	final XmlError stageError(string msg, XmlErrorLevel level = XmlErrorLevel.FATAL)
+	{
+		XmlError e = new XmlError(msg, level);
+		e.addMsg(format("In parse of %s",stageString()));
+		return errors_.preThrow(e);
+	}
+
 	final void parseAll(XmlEvent evt = null)
 	{
 		eventMode_ = true;
 		if (evt !is null)
 			results_ = evt;
-
-		while(stateDg_ !is null)
+		try {
+			while(stateDg_ !is null)
+			{
+				stateDg_();
+			}
+		}
+		catch(XmlError x)
 		{
-			stateDg_();
+			throw x;
+		}
+		catch(CharSequenceError se)
+		{
+			throw stageError(se.msg,XmlErrorLevel.ERROR);
+		}
+		catch(Exception e)
+		{
+			throw stageError(e.msg);
 		}
 	}
 
@@ -3119,17 +3182,12 @@ class XmlParser(T)  {
 					throw errors_.makeException("Unknown DTD data");
 				}
 			}
-
 			if (dtd_.src_.systemId_ !is null)
 			{
 				parseExternalDTD(dtd_.src_);
 			}
-
 			verifyGEntity();
-
 			inDTD_ = false;
-
-
 		}
 		/// adjust for getting a <!
 		private final bool isOpenBang()
@@ -3749,7 +3807,7 @@ class XmlParser(T)  {
 					}
 					else
 					{
-						return fatalError(format("unknown #",keyword));
+						return fatalError(format("unknown #%s",keyword));
 					}
 					defct++;
 					expectSeparator = true;
@@ -4304,17 +4362,16 @@ class XmlParser(T)  {
 		scope(exit)
 		{
 			destroy(ep);
-			destroy(s);
-			destroy(sf);
 		}
-		bool getData(ref const(dchar)[] data)
-		{
-			return sf.fillData(data,pos);
-		}
-		ep.initSource(&getData);
+		ep.fillSource(sf);
         ep.frontFilterOn();
 		ep.dtd_ = dtd_;
 		ep.isStandalone_ = false;
+
+		if (xmlEncoding_.length > 0)
+		{
+			ep.setXmlEncoding(to!(const(T)[])(xmlEncoding_));
+		}
 
 		bool wasInternal = dtd_.isInternal_;
 		dtd_.isInternal_ = false;
@@ -4322,8 +4379,6 @@ class XmlParser(T)  {
 		{
 			dtd_.isInternal_ = wasInternal;
 		}
-
-
 		events_.startDoctype(this);
 		ep.docTypeInnards(DocEndType.noDocEnd);
 		events_.endDoctype(this);

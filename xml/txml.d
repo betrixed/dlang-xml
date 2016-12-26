@@ -145,9 +145,12 @@ template xmlt(T) {
 
 	interface IXmlErrorHandler
 	{
-		XmlErrorLevel pushError(string s, XmlErrorLevel level);
+
 		void checkErrorStatus();
-		void setEncoding(const(T)[] codeName);
+		XmlError preThrow(XmlError ex);
+
+		XmlErrorLevel pushError(string s, XmlErrorLevel level);
+		
 
 		Exception makeException(XmlErrorCode code);
 		Exception makeException(string s, XmlErrorLevel level = XmlErrorLevel.FATAL);
@@ -189,9 +192,8 @@ template xmlt(T) {
 		}
 
 		void checkErrorStatus(){}
-		void setEncoding(const(T)[] codeName){}
 
-		Exception preThrow(XmlError e)
+		XmlError preThrow(XmlError e)
 		{
 			return e;
 		}
@@ -263,10 +265,10 @@ template xmlt(T) {
 
 static string badCharMsg(dchar c)
 {
-	if (cast(uint)c < 0x110000)
-		return format("bad character 0x%x [%s]\n", cast(uint)c, c);
-	else
-		return format("Character exceeds Unicode range 0x%x\n", cast(uint)c);
+	auto val = cast(uint)c;
+	if ( ((val >= 0xD800) && (val < 0xE000)) || ((val > 0xFFFD) && (val < 0x10000)) || (val > 0x110000))
+		return format("Forbidden character range 0x%x\n", val);
+	return format("bad character 0x%x [%s]\n", val, c);
 }
 
 /**

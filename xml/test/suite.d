@@ -38,7 +38,7 @@ template XMLTESTS(T)
 		string		baseDir;
 		string		uri;
 		XmlString  namespace;
-		string  edition; // some tests are XML edition dependent (blast: why cannot this have been put in the version=?)
+		string  edition;
 		bool    passed;
 		bool    summary;
 
@@ -446,18 +446,6 @@ template XMLTESTS(T)
 			if (loc !is null)
 			{
 				errors ~= format("filepos %d,  line %d, col %d", loc.getByteOffset(), loc.getLineNumber(), loc.getColumnNumber());
-			}
-			auto ex = error.getRelatedException();
-			if (ex !is null)
-			{
-				auto xe = cast(XmlError) ex;
-				if (xe !is null)
-				{
-					errors  ~= xe.errorList;
-				}
-				else {
-					errors ~= ex.toString();
-				}
 			}
 
 			if (errors.length == 0)

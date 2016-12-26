@@ -38,10 +38,28 @@ class XmlError : Exception {
 		level_ = level;
 		super(msg);
 	}
-
+	
+	void addMsg(string line)
+	{
+		errorList_ ~= line;
+	}
 	void errorList(string[] list) @property
 	{
 		errorList_ = list;
+	}
+
+	override string  toString()
+	{
+		string result = msg;
+		if (result !is null)
+			errorList_ ~= result;
+
+		if (errorList_.length > 0)
+		{
+			result = join(errorList_,'\n');
+		}
+
+		return result;
 	}
 
 	string[] errorList() @property 

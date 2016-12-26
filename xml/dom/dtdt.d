@@ -147,7 +147,10 @@ template XMLDTD(T)
 
 		private void voidMap(EntityDataMap emap)
 		{
-			foreach(k ; emap.byKey())
+			if (emap.length==0)
+				return;
+			auto kall = emap.keys();
+			foreach(k ; kall)
 			{
 				emap.remove(k);
 			}

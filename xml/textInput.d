@@ -819,7 +819,7 @@ struct ParseInputRange(T)
 /**
 	Take as input source a D string
 */
-class SliceFill(T) :  ReadBuffer!(dchar)
+class SliceBuffer(T) :  ReadBuffer!(dchar)
 {
 protected:
     const(T)[]		src_;
@@ -951,6 +951,11 @@ class FileReader(T) :  ReadBuffer!(T)
             return true;
         }
         return false;
+    }
+
+    this(string filename)
+    {
+        this(File(filename,"r"));
     }
     this(File ins)
     {
@@ -1268,7 +1273,7 @@ private:
             }
 			i++;
         }
-      
+
         return i;
     }
 

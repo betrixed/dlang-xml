@@ -54,7 +54,7 @@ class XmlParser(T)  {
 		bool				deviantData_; // sliced data run was broken
 		bool				inCharData;
 		bool				eventMode_; // results by events
-		
+
 		BBCount				bbct;
 	}
 
@@ -218,13 +218,13 @@ class XmlParser(T)  {
 		}
 		class XmlDataSource {
 			const(T)[]  source_;
-			SliceFill!T	translator_;
+			SliceBuffer!T	translator_;
 			ulong		pos_;
 
 			this(const(T)[] src)
 			{
 				source_ = src;
-				translator_ = new SliceFill!T(src);
+				translator_ = new SliceBuffer!T(src);
 			}
 
 			void explode()
@@ -932,7 +932,7 @@ class XmlParser(T)  {
 
 			if (namespaceAware_ && (indexOf(target,':') >= 0))
 				throw errors_.makeException(format(": in process instruction name %s for namespace aware parse",target));
-			
+
 			if (target == "xml")
 			{
 				Exception badThrow = null;
@@ -941,11 +941,11 @@ class XmlParser(T)  {
 					throw errors_.makeException("Xml declaration may not be in DTD");
 				if (state_ > PState.P_PROLOG || (spaceCt > 0) || (itemCount > 0))
 					throw errors_.makeException("xml declaration should be first");
-				
+
 				if (!hasDeclaration)
 				{
 					hasDeclaration = true;
-					
+
 					/*try
 					{*/
 						doXmlDeclaration();
@@ -953,7 +953,7 @@ class XmlParser(T)  {
 						return;
 					/*}
 					catch (XmlError xm)
-					{	
+					{
 						auto s = xm.toString();
 						badThrow = errors_.preThrow(new XmlError(s, xm.level));
 					}
@@ -1193,7 +1193,7 @@ class XmlParser(T)  {
 			{
 				stateDg_ = &doEpilog;
 				state_ = PState.P_EPILOG;
-			} 
+			}
 			else {
 				state_ = PState.P_CONTENT;
 			}
@@ -4355,8 +4355,7 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto s = new FileReader(uri);
-		auto sf = new XmlFileReader(s);
+		auto sf = new XmlFileReader(File(uri,"r"));
 		ulong	pos;
 
 		scope(exit)
@@ -4429,15 +4428,13 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto s = new FileReader(uri);
-		auto sf = new XmlFileReader(s);
+		auto sf = new XmlFileReader(File(uri,"r"));
 		ulong	pos;
 
 		scope(exit)
 		{
 			ep.explode();
 			destroy(ep);
-			destroy(s);
 			destroy(sf);
 		}
 		bool getData(ref const(dchar)[] data)

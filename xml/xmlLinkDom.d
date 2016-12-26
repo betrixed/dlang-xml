@@ -97,8 +97,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		doc_ = d;
 		setFromDocument();
 		addSystemPath(normalizedDirName(srcPath));
-		auto s = new FileReader(srcPath);
-		auto sf = new XmlFileReader(s);
+		auto sf = new XmlFileReader(File(srcPath,"r"));
 		parser_.fillSource = sf;
 		parser_.parseAll();
 	}
@@ -1490,7 +1489,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 								{
 									if (!hasAnotherChoice())
 									{
-										
+
 										return missingElement(ce.id);
 									}
 								}

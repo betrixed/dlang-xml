@@ -20,11 +20,11 @@ class GCStatsSum {
 		gAllStats ~= this;
 	}
 
-    void inc()
+    void inc() @safe @nogc
 	{
 		sCreated++;
 	}
-    void dec()
+    void dec() @safe @nogc
 	{
 		sDeleted++;
 	}

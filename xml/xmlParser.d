@@ -779,7 +779,8 @@ class XmlParser(T)  {
 
 			frontFilterOff();
 			//ename.length = 0;
-			ename.shrinkTo(0);
+			xmlt!T.reset(ename);
+			//ename.shrinkTo(0);
 			ename ~= test;
 			popFront();
 			while (!empty)
@@ -813,7 +814,8 @@ class XmlParser(T)  {
 			/// Slicing fails on last character in slice and pop of context on empty
 			/// So have to buffer collect anyway
 			//bufTag_.length = 0;
-			bufTag_.shrinkTo(0);
+			xmlt!T.reset(bufTag_);
+			//bufTag_.shrinkTo(0);
 			bufTag_ ~= test;
 
 			popFront();
@@ -835,7 +837,8 @@ class XmlParser(T)  {
 			}
 			else {
 				//tag = bufTag_.idup;
-				tag = bufTag_.data.idup;
+				tag = xmlt!T.data(bufTag_).idup;
+				//tag = bufTag_.data.idup;
 			}
 			frontFilterOn();
 			return true;
@@ -867,13 +870,14 @@ class XmlParser(T)  {
 			}
 
 			//bufAttr_.length = 0;
-			bufAttr_.shrinkTo(0);
+			//bufAttr_.shrinkTo(0);
+			xmlt!T.reset(bufAttr_);
 			frontFilterOn();
 			while(!empty)
 			{
 				if (front == enquote)
 				{
-					if (bufAttr_.data.length > 0)
+					if (xmlt!T.length(bufAttr_) > 0)
 					{
 						if (slicing_ && !deviant)
 						{
@@ -881,7 +885,7 @@ class XmlParser(T)  {
 							val = marker_[];
 						}
 						else {
-							val = bufAttr_.data.idup;
+							val = xmlt!T.data(bufAttr_).idup;
 						}
 					}
 					else
@@ -982,7 +986,7 @@ class XmlParser(T)  {
 			{
 				eventId = SAX.XML_PI;
 				data = target;
-				attributes = Attribute(target,bufContent_.data.idup);
+				attributes = Attribute(target,xmlt!T.data(bufContent_).idup);
 			}
 			if(eventMode_)
 				events_.instruction(results_);
@@ -998,7 +1002,7 @@ class XmlParser(T)  {
 
 			bool	hasContent = false;
 			bool	hasSpace = false;
-			app.shrinkTo(0);
+			xmlt!T.reset(app);
 
 			frontFilterOn();
 			while(!empty)
@@ -1136,7 +1140,8 @@ class XmlParser(T)  {
 				deviantData_ = false;
 				marker_.start(sliceData_.ptr, mpos);
 			}
-			bufContent_.shrinkTo(0);
+			//bufContent_.shrinkTo(0);
+			xmlt!T.reset(bufContent_);
 			frontFilterOn();
 			while(!empty)
 			{
@@ -1175,12 +1180,14 @@ class XmlParser(T)  {
 				if (slicing_ && !deviantData_)
 					data = marker_[];
 				else
-					data = bufContent_.data.idup;
+					data = xmlt!T.data(bufContent_).idup;
+					//bufContent_.data.idup;
 				attributes.reset();
 			}
 			if (eventMode_)
 				events_.comment(results_);
-			bufContent_.shrinkTo(0);
+            xmlt!T.reset(bufContent_);
+			//bufContent_.shrinkTo(0);
 
 		}
 
@@ -1622,14 +1629,16 @@ class XmlParser(T)  {
 					data = marker_[];
 				}
 				else {
-					data = bufContent_.data.idup;
+					//data = bufContent_.data.idup;
+					data = xmlt!T.data(bufContent_).idup;
 				}
 				attributes.reset();
 			}
 			if (eventMode_)
 				events_.text(results_);
 			//bufContent_.length = 0;
-			bufContent_.shrinkTo(0);
+            xmlt!T.reset(bufContent_);
+			//bufContent_.shrinkTo(0);
 			inCharData = false;
 			deviantData_ = false;
 			return;
@@ -1643,7 +1652,8 @@ class XmlParser(T)  {
 		final void doContent()
 		{
 			state_ = PState.P_CONTENT;
-			bufContent_.shrinkTo(0);
+			//bufContent_.shrinkTo(0);
+			xmlt!T.reset(bufContent_);
 			inCharData = false;
 			frontFilterOn();
 			LOOP_FOREVER:
@@ -1763,7 +1773,7 @@ class XmlParser(T)  {
 					if (!inCharData)
 					{
 						inCharData = true;
-						bufContent_.shrinkTo(0);
+						xmlt!T.reset(bufContent_);
 						if (slicing_)
 						{
 							marker_.start(sliceData_.ptr, mpos);
@@ -1833,7 +1843,7 @@ class XmlParser(T)  {
 						goto default;
 					default:
 						if (getXmlName(bufTag_))
-							throw errors_.makeException(format("Epilog illegal %s",bufTag_.data),XmlErrorLevel.FATAL);
+							throw errors_.makeException(format("Epilog illegal %s",xmlt!T.data(bufTag_)),XmlErrorLevel.FATAL);
 						else
 							throw errors_.makeException("Epilog illegal " ~ badCharMsg(front));
 				}
@@ -1869,7 +1879,7 @@ class XmlParser(T)  {
 
 		final void doCDATAContent()
 		{
-			bufContent_.shrinkTo(0);
+            xmlt!T.reset(bufContent_);
 			if (slicing_)
 			{
 				marker_.start(sliceData_.ptr, mpos);
@@ -1893,12 +1903,12 @@ class XmlParser(T)  {
 							data = marker_[];
 						}
 						else
-							data = bufContent_.data.idup;
+							data = xmlt!T.data(bufContent_).idup;
 						attributes.reset();
 					}
 					if (eventMode_)
 						events_.cdata(results_);
-					bufContent_.shrinkTo(0);
+					xmlt!T.reset(bufContent_);
 					return;
 				}
 				else
@@ -2503,7 +2513,7 @@ class XmlParser(T)  {
     protected bool doReplaceCharRef(ref XmlBuffer app)
     {
         dchar rchar = 0;
-		auto beginLength = app.data.length;
+		auto beginLength = xmlt!T.length(app);
 
         while (!empty)
         {
@@ -2537,7 +2547,7 @@ class XmlParser(T)  {
                 popFront();
             }
         }
-        return (app.data.length - beginLength > 0);
+        return (xmlt!T.length(app) - beginLength > 0);
     }
 	/// return entity data object
     EntityData getParameterEntity(const(T)[] peName, ref StringSet stk, bool isValue = true)
@@ -2597,13 +2607,13 @@ class XmlParser(T)  {
                 }
                 if (isValue)
                 {
-					this.pushContext(buf1.data.idup);
+					this.pushContext(xmlt!T.data(buf1).idup);
 					scope(exit)
 						this.popContext();
-					buf1.shrinkTo(0);
+					xmlt!T.reset(buf1);
                     expandParameterEntities(pe.isInternal_, buf1, stk);
                 }
-                pe.value(buf1.data.idup);
+                pe.value(xmlt!T.data(buf1).idup);
             }
             pe.status_ = EntityData.Expanded;
             stk.remove(peName);
@@ -2753,8 +2763,7 @@ class XmlParser(T)  {
 			// no entities
 			return;
 		}
-		bufNormAttr_.shrinkTo(0);
-		bufNormAttr_ ~= src[0..epos];
+		xmlt!T.assign(bufNormAttr_, src[0..epos]);
         pushContext(src[epos..$], true, null);
         scope(exit)
             popContext();
@@ -2805,7 +2814,7 @@ class XmlParser(T)  {
 				break;
             }
         }
-		src = bufNormAttr_.data.idup;
+		src = xmlt!T.data(bufNormAttr_).idup;
     }
 
 
@@ -3071,7 +3080,7 @@ class XmlParser(T)  {
 				throw errors_.makeException("Quoted PUBLIC id expected");
 
 			int  ct = 0;
-			bufAttr_.shrinkTo(0);
+			xmlt!T.reset(bufAttr_);
 			auto hasSpace = false;
 			foreach(dchar c; opt)
 			{
@@ -3096,7 +3105,7 @@ class XmlParser(T)  {
 						break;
 				}
 			}
-			opt = bufAttr_.data.idup;
+			opt = xmlt!T.data(bufAttr_).idup;
 			return true;
 		}
 		// Get ASCII uppercase key word.
@@ -3115,7 +3124,7 @@ class XmlParser(T)  {
 				}
 				else {
 					// got to be whitespace or a separator. Alpha numeric is likely wrong.
-					ukw = kw.data.idup;
+					ukw = xmlt!T.data(kw).idup;
 					if (std.ascii.isAlphaNum(test) || (ukw.length == 0))
 						throw errors_.makeException(format("Upper case keyword expected: %s + %s", ukw, test));
 					return ukw.length > 0;
@@ -3640,7 +3649,7 @@ class XmlParser(T)  {
             {
                 throw errors_.makeException("need space before NDATA name");
             }
-            opt = bufTag_.data.idup;
+            opt = xmlt!T.data(bufTag_).idup;
             return true;
         }
         return false; // no such thing
@@ -4082,21 +4091,20 @@ class XmlParser(T)  {
 						this.popContext();
                     if (!textReplaceCharRef(tempBuf))
                         return false;
-					tempValue = tempBuf.data.idup;
+					tempValue = xmlt!T.data(tempBuf).idup;
                 }
 				if (inDTD())
 				{
  					auto pcix = tempValue.indexOf('%');
 					if (pcix >= 0)
 					{
-						tempBuf.shrinkTo(0);
-						tempBuf ~= tempValue[0..pcix];
+                        xmlt!T.assign(tempBuf,tempValue[0..pcix]);
 						StringSet eset;
 						this.pushContext(tempValue[pcix..$]);
 						scope(exit)
 							this.popContext();
 						expandParameterEntities(entity.isInternal_, tempBuf, eset);
-						tempValue = tempBuf.data.idup;
+						tempValue = xmlt!T.data(tempBuf).idup;
 					}
 				}
 
@@ -4183,7 +4191,7 @@ class XmlParser(T)  {
                 popFront();
             }
         }
-        return (app.data.length > 0);
+        return (xmlt!T.length(app) > 0);
     }
 
 	bool expandEntityData(ref XmlBuffer app, StringSet entityNameSet, out int refType)
@@ -4191,25 +4199,11 @@ class XmlParser(T)  {
 
 
         uint	  radix;
-        bool hitReference = false;
+        bool 	  hitReference = false;
 
         //ParseInput src = sctx.in_;
-		app.shrinkTo(0);
+		xmlt!T.reset(app);
 		XmlString ename;
-
-        void putCharRef(dchar cref, uint radix)
-        {
-			auto w = appender!(T[])();
-            app ~= "&#";
-            if (radix==16)
-                app ~= 'x';
-			auto specstr = (radix==16) ? "%x" : "%d";
-			auto spec = singleSpec(specstr);
-
-			formatValue(w,cast(uint)cref,spec);
-			app ~= w.data;
-            app ~= ';';
-        }
 
         while (true)
         {
@@ -4224,8 +4218,7 @@ class XmlParser(T)  {
 					}
 					else if (matchInput("<![CDATA["))
 					{
-						app ~= "<![CDATA[";
-
+						xmlt!T.append(app,"<![CDATA[");
 						bool hitEnd = false;
 
 						while(!empty) // this is to validate the CDATA section ends properly
@@ -4239,7 +4232,7 @@ class XmlParser(T)  {
 								{
 									dchar cref = expectedCharRef(radix);
 									// and output it, still as character reference
-									putCharRef(cref,radix);
+									xmlt!T.putCharRef(app,cref,radix);
 
 								}
 								else
@@ -4253,7 +4246,7 @@ class XmlParser(T)  {
 							}
 							else if (isCDataEnd())
 							{
-								app ~= "]]>";
+								xmlt!T.append(app,"]]>");
 								hitEnd = true;
 								break;
 							}
@@ -4284,7 +4277,7 @@ class XmlParser(T)  {
 
 						if (uc == '&')
 						{
-							putCharRef(uc,radix);
+							xmlt!T.putCharRef(app,uc,radix);
 						}
 						else
 						{
@@ -4299,7 +4292,7 @@ class XmlParser(T)  {
 						if (pc !is null)
 						{
 							app ~= '&';
-							app ~= bufTag_.data;
+							app ~= xmlt!T.data(bufTag_);
 							app ~= ';';
 						}
 						else
@@ -4335,7 +4328,7 @@ class XmlParser(T)  {
 
         if (hitReference)
         {
-            this.pushContext(app.data.idup);
+            this.pushContext(xmlt!T.data(app).idup);
 			scope(exit)
 				this.popContext();
             return expandEntityData(app, entityNameSet, refType);
@@ -4451,9 +4444,9 @@ class XmlParser(T)  {
         XmlBuffer	edata;
  		ep.frontFilterOn();
 		ep.textReplaceCharRef(edata);
-		if (edata.data.length > 0)
+		if (xmlt!T.length(edata) > 0)
 		{
-			entity.value_ = edata.data.idup;
+			entity.value_ = xmlt!T.data(edata).idup;
 			entity.isInternal_ = false;
 			entity.baseDir_ = dirName(uri);
 			entity.status_ = EntityData.Found;
@@ -4998,8 +4991,7 @@ class XmlParser(T)  {
             return false;
         if ( !(isNameCharFn(front) || isNameCharFifthEdition(front)) )
             return false;
-        cbuf.shrinkTo(0);
-        cbuf ~= front;
+        xmlt!T.assign(cbuf,front);
 
         frontFilterOff();
         popFront();
@@ -5036,7 +5028,7 @@ class XmlParser(T)  {
             {
                 throw errors_.makeException("attribute enumeration");
             }
-            adef.values ~= bufTag_.data.idup;
+            adef.values ~= xmlt!T.data(bufTag_).idup;
 
             munchSpace();
             if (empty)

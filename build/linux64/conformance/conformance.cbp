@@ -11,11 +11,11 @@
 				<Option object_output="Debug/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
-				<Option parameters="--input ../../../xmlconf/xmlconf.xml --summary --test hst-bh-005" />
+				<Option parameters="--input ../../../xmlconf/xmlconf.xml --summary --test not-wf-sa-020" />
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />
-					<Add option="-I../../../ -version=GC_STATS" />
+					<Add option="-I../../../ -I../../../examples/conform/src -version=BUF_NATIVE -version=BUF_APPENDER" />
 				</Compiler>
 			</Target>
 			<Target title="Release">
@@ -25,15 +25,15 @@
 				<Option compiler="dmd" />
 				<Compiler>
 					<Add option="-O" />
-					<Add option="-I../../../" />
+					<Add option="-I../../../ -version=BUF_NATIVE" />
 				</Compiler>
 			</Target>
 		</Build>
 		<Unit filename="../../../README.md" />
+		<Unit filename="../../../examples/conform/src/conform.d" />
+		<Unit filename="../../../examples/conform/src/testSuite.d" />
 		<Unit filename="../../../xml/dom/domt.d" />
 		<Unit filename="../../../xml/dom/dtdt.d" />
-		<Unit filename="../../../xml/test/conform.d" />
-		<Unit filename="../../../xml/test/suite.d" />
 		<Unit filename="../../../xml/textInput.d" />
 		<Unit filename="../../../xml/txml.d" />
 		<Unit filename="../../../xml/util/bomstring.d" />

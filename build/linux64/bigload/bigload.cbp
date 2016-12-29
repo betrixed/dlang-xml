@@ -14,7 +14,7 @@
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />
-					<Add option="-I../../../" />
+					<Add option="-I../../../ -version=GC_STATS" />
 				</Compiler>
 			</Target>
 			<Target title="Release">
@@ -28,10 +28,10 @@
 				</Compiler>
 			</Target>
 		</Build>
+		<Unit filename="../../../examples/bigload/src/bigload.d" />
 		<Unit filename="../../../xml/dom/domt.d" />
 		<Unit filename="../../../xml/dom/dtdt.d" />
 		<Unit filename="../../../xml/std/xmlSlicer.d" />
-		<Unit filename="../../../xml/test/bigload.d" />
 		<Unit filename="../../../xml/textInput.d" />
 		<Unit filename="../../../xml/txml.d" />
 		<Unit filename="../../../xml/util/bomstring.d" />

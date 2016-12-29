@@ -50,9 +50,9 @@ template XMLSAX(T) {
 			}
 		}
 		// look me up, key for tag name, and parent tag of assorted child types
-		immutable(T)[]				tagkey_;	 // 
+		immutable(T)[]				tagkey_;	 //
 		// array for lookup of common SAX events, an array block. Alternative is an AA, which will test to use even more
-		SaxDg[SAX.DOC_END]			callbacks_;  
+		SaxDg[SAX.DOC_END]			callbacks_;
 
 		void setInterface(IXmlDocHandler i)
 		{
@@ -231,7 +231,7 @@ class TagSpace
 
 class SaxParser : xml.txml.xmlt!T.XmlErrorImpl {
 private:
-		
+
 	static struct ParseLevel
 	{
 		string					tagName;
@@ -303,7 +303,7 @@ public:
 	}
 	void setupNoSlice(S)(immutable(S)[] xml)
 	{
-		auto sf = new SliceFill!S(xml);
+		auto sf = new SliceBuffer!S(xml);
 		ulong pos = 0;
 		bool getData(ref const(dchar)[] data)
 		{

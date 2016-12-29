@@ -1,16 +1,37 @@
 module xml.txml;
 
+/*
+ Various Xml parsing options have been templated for character type.
+ to allow for interesting combinations of source documents.
+
+ A critical choice for performance is the data structure used to implement XmlBuffer.
+ XmlBuffer is used to accumulate segments of xml text.
+
+ This module establishes some non-dependent enums, and those
+ interfaces and classes which will change with the template character type argument.
+
+ xmlt(T) and its code resources are used by nearly all of the other modules in this xml package.
+ xml.txml establishes XmlEvent, IXmlErrorHandler, IXmlDocHandler  templated for a character type.
+
+---------------
+Copyright: Copyright Michael Rynn 2011 - 2016.
+License:   $(HTTP www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+Authors:   Michael Rynn
+ */
+
 import std.typecons : tuple, Tuple;
 import std.string, std.stdint, std.utf;
 import std.algorithm;
 import xml.util.buffer;
-import std.container.array;
+//import std.container.array;
+import std.array;
 import std.traits;
 import std.conv;
 import xml.xmlChar;
 import xml.xmlError;
 import xml.xmlAttribute;
 import std.ascii;
+import std.format;
 version(GC_STATS)
 	import xml.util.gcstats;
 
@@ -97,17 +118,147 @@ enum AttributeType
     att_enumeration
 }
 
-import std.array;
-
 template xmlt(T) {
 	alias immutable(T)[] XmlString;
 
 	static const XmlString xmlNamespaceURI = "http://www.w3.org/XML/1998/namespace";
 	static const XmlString xmlnsURI = "http://www.w3.org/2000/xmlns/";
+	// Handle painful differences in buffer implementations, to enable comparisons.
+	// Maybe these get optimized away?
+	version (BUF_NATIVE) {
+		version (BUF_APPENDER) {
+			import std.array;
+			alias Appender!(T[]) XmlBuffer; // Faster than T[]
+			T[] data(ref XmlBuffer xbuf)
+			{
+				return xbuf.data;
+			}
+			void reset(ref XmlBuffer xbuf)
+			{
+                xbuf.clear();
+			}
+			ulong length(ref XmlBuffer xbuf)
+            {
+                return xbuf.data.length;
+            }
+            void assign(ref XmlBuffer xbuf, const(T)[] val)
+			{
+                xbuf.clear();
+                xbuf ~= val;
+			}
+			void append(ref XmlBuffer xbuf, const(char)[] val)
+			{
+				xbuf ~= val;
+			}
+			void assign(ref XmlBuffer xbuf, dchar val)
+			{
+                xbuf.clear();
+                xbuf ~= val;
+			}
+	        void putCharRef(ref XmlBuffer xbuf, dchar cref, uint radix)
+	        {
+				//
+				xbuf ~= '&';
+				xbuf ~= '#';
+	            if (radix==16)
+	                xbuf ~= 'x';
+				auto specstr = (radix==16) ? "%x" : "%d";
+				auto spec = singleSpec(specstr);
+				formatValue(xbuf, cast(uint)cref,spec);
+				//formatValue(w,cast(uint)cref,spec);
+	            xbuf ~= ';';
+	        }
+		}
+		else
+		{
+			alias T[] XmlBuffer;
 
-	//alias T[] XmlBuffer; // this has performance slow down due to GC heap interactions
-	//alias Appender!(T[]) XmlBuffer; // still a bit slow - for what reasons I don't care to figure out
-	alias Buffer!T XmlBuffer; // about 30% faster than Appender. Does not scrub on shrink
+			T[] data(ref XmlBuffer xbuf)
+			{
+				return xbuf;
+			}
+			void reset(ref XmlBuffer xbuf)
+			{
+                xbuf.length = 0;
+			}
+			void assign(ref XmlBuffer xbuf, const(T)[] val)
+			{
+                xbuf = val.dup;
+			}
+			void append(ref XmlBuffer xbuf, const(char)[] val)
+			{
+				xbuf ~= to!(T[])(val);
+			}
+			void assign(ref XmlBuffer xbuf, dchar val)
+			{
+                xbuf.length = 0;
+                xbuf ~= val;
+			}
+            ulong length(ref XmlBuffer xbuf)
+            {
+                return xbuf.length;
+            }
+            void putCharRef(ref XmlBuffer xbuf, dchar cref, uint radix)
+	        {
+				//
+				xbuf ~= '&';
+				xbuf ~= '#';
+	            if (radix==16)
+	                xbuf ~= 'x';
+				auto specstr = (radix==16) ? "%x" : "%d";
+				auto spec = singleSpec(specstr);
+				auto w = appender!(T[])();
+				formatValue(w, cast(uint)cref,spec);
+				//formatValue(w,cast(uint)cref,spec);
+				xbuf ~= w.data;
+	            xbuf ~= ';';
+	        }
+
+		}
+	}
+	else {
+		alias Buffer!T XmlBuffer; // Still faster than Appender. Does not scrub on shrink
+
+		T[] data(ref XmlBuffer xbuf)
+		{
+			return xbuf.data;
+		}
+		void reset(ref XmlBuffer xbuf)
+		{
+            xbuf.shrinkTo(0);
+		}
+		void assign(ref XmlBuffer xbuf, const(T)[] val)
+		{
+            xbuf = val;
+		}
+		void append(ref XmlBuffer xbuf, const(char)[] val)
+		{
+			xbuf ~= val;
+		}
+		void assign(ref XmlBuffer xbuf, dchar val)
+		{
+            xbuf.length = 0;
+            xbuf ~= val;
+		}
+        ulong length(ref XmlBuffer xbuf)
+        {
+            return xbuf.length;
+        }
+        void putCharRef(ref XmlBuffer xbuf, dchar cref, uint radix)
+        {
+			//
+			xbuf ~= '&';
+			xbuf ~= '#';
+            if (radix==16)
+                xbuf ~= 'x';
+			auto specstr = (radix==16) ? "%x" : "%d";
+			auto spec = singleSpec(specstr);
+			formatValue(xbuf, cast(uint)cref,spec);
+			//formatValue(w,cast(uint)cref,spec);
+            xbuf ~= ';';
+        }
+	}
+
 	alias XMLAttribute!T.XmlAttribute	XmlAttribute;
 	alias XMLAttribute!T.AttributeMap   AttributeMap;
 
@@ -150,7 +301,7 @@ template xmlt(T) {
 		XmlError preThrow(XmlError ex);
 
 		XmlErrorLevel pushError(string s, XmlErrorLevel level);
-		
+
 
 		Exception makeException(XmlErrorCode code);
 		Exception makeException(string s, XmlErrorLevel level = XmlErrorLevel.FATAL);

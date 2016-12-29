@@ -1,0 +1,38 @@
+{
+	"name": "conform",
+	"targetName" : "conform",
+	"targetType" : "executable",
+	"mainSourceFile" : "src/conform.d",
+	"authors": [
+		"Michael Rynn"
+	],
+	"importPaths" : ["../../", "src/"],
+	"description": "compare with std.xml",
+	"copyright": "Copyright © 2016, Michael Rynn",
+	"license": "Artistic-2.0",
+	"versions" : ["BUF_NATIVE"],
+	"buildOptions" : ["releaseMode"],
+	"sourceFiles" : [
+		"src/testSuite.d",
+		"../../xml/dom/domt.d",
+		"../../xml/dom/dtdt.d",
+		"../../xml/textInput.d",
+		"../../xml/txml.d",
+		"../../xml/util/bomstring.d",
+		"../../xml/util/buffer.d",
+		"../../xml/util/gcstats.d",
+		"../../xml/util/inputEncode.d",
+		"../../xml/util/jisx0208.d",
+		"../../xml/util/read.d",
+		"../../xml/xmlArrayDom.d",
+		"../../xml/xmlAttribute.d",
+		"../../xml/xmlChar.d",
+		"../../xml/xmlError.d",
+		"../../xml/xmlLinkDom.d",
+		"../../xml/std/xmlSlicer.d",
+		"../../xml/xmlOutput.d",
+		"../../xml/xmlParser.d"
+
+	]
+	
+}

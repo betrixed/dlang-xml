@@ -11,7 +11,7 @@ module xml.dom.arrayt;
 import xml.util.buffer;
 import xml.util.print;
 
-import std.string, std.conv, std.exception, std.stream;
+import std.string, std.conv, std.exception, std.stdio;
 import std.variant;
 version(GC_STATS)
 import util.gcstats;

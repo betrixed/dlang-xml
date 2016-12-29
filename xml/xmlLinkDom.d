@@ -9,8 +9,8 @@ import std.file, std.path;
 
 import std.string, std.stdint;
 import std.conv, std.algorithm, std.variant, std.array;
+import std.stdio;
 
-debug import std.stdio;
 version(GC_STATS)
 {
     import xml.util.gcstats;
@@ -115,7 +115,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	{
 		doc_ = d;
 		setFromDocument();
-		parser_.fillSource(new SliceFill!S(src));
+		parser_.fillSource(new SliceBuffer!S(src));
 		parser_.parseAll();
 	}
 	void parseSlice(Document d, immutable(T)[] src)
@@ -838,7 +838,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 				parser_.popContext();
 			replace = parser_.attributeTextReplace(resultBuf, 0);
 		}
-		result = (replace) ? resultBuf.data.idup : oldValue;
+		result = (replace) ? xmlt!T.data(resultBuf).idup : oldValue;
         XmlString[] valueset;
         uint vct = 0;
         bool doValidate = parser_.validate();
@@ -1238,10 +1238,10 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 app ~= test;
             }
         }
-
-        if (app.data != value)
+        auto checkVal = xmlt!T.data(app);
+        if (checkVal != value)
         {
-            value = app.data.idup;
+            value = checkVal.idup;
             return true;
         }
         return false;

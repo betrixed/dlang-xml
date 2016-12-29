@@ -1,4 +1,9 @@
 // Written in the D programming language.
+/**
+    Taken from std.xml, with additions to class creation for GC_STATS
+and removal of a few @nogc, pure, to allow this
+*/
+
 
 /**
 $(RED Warning: This module is considered out-dated and not up to Phobos'
@@ -51,6 +56,7 @@ import std.xml;
 import std.stdio;
 import std.string;
 
+
 struct Book
 {
     string id;
@@ -93,7 +99,7 @@ void main()
 
     // Put it back together again;
     auto doc = new Document(new Tag("catalog"));
-    foreach(book;books)
+    foreach (book;books)
     {
         auto element = new Element("book");
         element.tag.attr["id"] = book.id;
@@ -112,12 +118,9 @@ void main()
     writefln(join(doc.pretty(3),"\n"));
 }
 -------------------------------------------------------------------------------
-Macros:
-    WIKI=Phobos/StdXml
-
 Copyright: Copyright Janice Caron 2008 - 2009.
-License:   $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
-Authors:   Janice Caron, Michael Rynn
+License:   $(HTTP www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+Authors:   Janice Caron
 Source:    $(PHOBOSSRC std/_xml.d)
 */
 /*
@@ -126,53 +129,13 @@ Distributed under the Boost Software License, Version 1.0.
    (See accompanying file LICENSE_1_0.txt or copy at
          http://www.boost.org/LICENSE_1_0.txt)
 */
-module xml.std.xmlSlicer; // renamed for test comparisons
+module xml.std.xmlSlicer;
 
-import std.algorithm : count, startsWith;
-import std.array;
-import std.ascii;
-import std.string;
-import std.encoding;
-import std.stdio;
-import std.stdint;
-
-
-/**
-	On investigation, using GC_STATS instance counting, it was found that with a big document load (see bigload project),
-too many Tag, ElementParser, and Element objects seemed to hang around in GC land. Like fleas on a cat.
-Cause unknown, maybe lots of function closures hanging around with references on heap. The GC should be better than this.
-
-This was 'fixed' only by ensuring the transitory nature of such objects.
-The 'Element' object passed on the EndTag event, is guaranteed transitory, by destroy after use.
-ElementParser is of course, an enforced transient.
-The explode() method is available on the DOM tree to enforce destruction.
-
-GC_STATS also noted that 3 times as many Tag objects were created as number of Element objects.
-This prompted a implementation alteration.
-The Element object no longer has a Tag sub object, but uses direct fields of name, attributes, tag type, tagString.
-A TagData structure in the ElementParser eliminated some of the creation and destruction of Tag objects.
-ElementParser maintains a local Tag object stack in the parse function, rather than an associative array.
-
-After using this methodology, the bigload test cleared all xmlSlice objects from GC memory.
-
-Design of check(document).  This has the problem that exceptions are thrown for most ordinary results of checks, caught and rethrown.
-This technically works, but has slower performance.  It was also a little hard to follow in the code.
-
-In theory a valid XML document should throw no exceptions at all during a check.
-
-In no way will this be a check for more obscure issues.  DOCTYPE is still not supported.
-
-
-The check functions were changed to only throw errors if a not well formed condition is encountered.
-A check stack of string slices keeps track of the parse check state history.
-
-This is still a relatively 'standalone' XML module
-*/
-
-version(GC_STATS)
+version (GC_STATS)
 {
-	import xml.util.gcstats;
+    import xml.util.gcstats;
 }
+
 enum cdata = "<![CDATA[";
 
 /**
@@ -183,13 +146,13 @@ enum cdata = "<![CDATA[";
  * Params:
  *    c = the character to be tested
  */
-bool isChar(dchar c) // rule 2
+bool isChar(dchar c) @safe @nogc pure nothrow // rule 2
 {
     if (c <= 0xD7FF)
     {
         if (c >= 0x20)
             return true;
-        switch(c)
+        switch (c)
         {
         case 0xA:
         case 0x9:
@@ -207,10 +170,8 @@ bool isChar(dchar c) // rule 2
     return false;
 }
 
-unittest
+@safe @nogc nothrow pure unittest
 {
-//  const CharTable=[0x9,0x9,0xA,0xA,0xD,0xD,0x20,0xD7FF,0xE000,0xFFFD,
-//        0x10000,0x10FFFF];
     assert(!isChar(cast(dchar)0x8));
     assert( isChar(cast(dchar)0x9));
     assert( isChar(cast(dchar)0xA));
@@ -250,7 +211,7 @@ unittest
  * Params:
  *    c = the character to be tested
  */
-bool isSpace(dchar c)
+bool isSpace(dchar c) @safe @nogc pure nothrow
 {
     return c == '\u0020' || c == '\u0009' || c == '\u000A' || c == '\u000D';
 }
@@ -263,7 +224,7 @@ bool isSpace(dchar c)
  * Params:
  *    c = the character to be tested
  */
-bool isDigit(dchar c)
+bool isDigit(dchar c) @safe @nogc pure nothrow
 {
     if (c <= 0x0039 && c >= 0x0030)
         return true;
@@ -271,7 +232,7 @@ bool isDigit(dchar c)
         return lookup(DigitTable,c);
 }
 
-unittest
+@safe @nogc nothrow pure unittest
 {
     debug (stdxml_TestHardcodedChecks)
     {
@@ -288,7 +249,7 @@ unittest
  * Params:
  *    c = the character to be tested
  */
-bool isLetter(dchar c) // rule 84
+bool isLetter(dchar c) @safe @nogc nothrow pure // rule 84
 {
     return isIdeographic(c) || isBaseChar(c);
 }
@@ -302,7 +263,7 @@ bool isLetter(dchar c) // rule 84
  * Params:
  *    c = the character to be tested
  */
-bool isIdeographic(dchar c)
+bool isIdeographic(dchar c) @safe @nogc nothrow pure
 {
     if (c == 0x3007)
         return true;
@@ -313,7 +274,7 @@ bool isIdeographic(dchar c)
     return false;
 }
 
-unittest
+@safe @nogc nothrow pure unittest
 {
     assert(isIdeographic('\u4E00'));
     assert(isIdeographic('\u9FA5'));
@@ -337,7 +298,7 @@ unittest
  * Params:
  *    c = the character to be tested
  */
-bool isBaseChar(dchar c)
+bool isBaseChar(dchar c) @safe @nogc nothrow pure
 {
     return lookup(BaseCharTable,c);
 }
@@ -351,7 +312,7 @@ bool isBaseChar(dchar c)
  * Params:
  *    c = the character to be tested
  */
-bool isCombiningChar(dchar c)
+bool isCombiningChar(dchar c) @safe @nogc nothrow pure
 {
     return lookup(CombiningCharTable,c);
 }
@@ -364,7 +325,7 @@ bool isCombiningChar(dchar c)
  * Params:
  *    c = the character to be tested
  */
-bool isExtender(dchar c)
+bool isExtender(dchar c) @safe @nogc nothrow pure
 {
     return lookup(ExtenderTable,c);
 }
@@ -388,13 +349,15 @@ bool isExtender(dchar c)
  *
  * Returns: The encoded string
  *
- * Examples:
+ * Example:
  * --------------
  * writefln(encode("a > b")); // writes "a &gt; b"
  * --------------
  */
 S encode(S)(S s)
 {
+    import std.array : appender;
+
     string r;
     size_t lastI;
     auto result = appender!S();
@@ -421,7 +384,7 @@ S encode(S)(S s)
     return result.data;
 }
 
-unittest
+@safe unittest
 {
     auto s = "hello";
     assert(encode(s) is s);
@@ -432,62 +395,6 @@ unittest
     assert(encode("cat & dog") == "cat &amp; dog");
 }
 
-void failCheck(string tail, string msg)
-{
-	throw new Err(tail,msg);
-}
-void checkCharRef(ref string s, out dchar c) // rule 66
-{
-
-
-	checkLiteral("&#",s);
-	c = 0;
-	int radix = 10;
-	if (s.length != 0 && s[0] == 'x')
-	{
-		s = s[1..$];
-		radix = 16;
-	}
-	if (s.length == 0)
-		failCheck(s,"unterminated character reference");
-	if (s[0] == ';')
-		failCheck(s,"character reference must have at least one digit");
-	while (s.length != 0)
-	{
-		char d = s[0];
-		int n = 0;
-		switch(d)
-		{
-			case 'F','f': ++n;      goto case;
-			case 'E','e': ++n;      goto case;
-			case 'D','d': ++n;      goto case;
-			case 'C','c': ++n;      goto case;
-			case 'B','b': ++n;      goto case;
-			case 'A','a': ++n;      goto case;
-			case '9':     ++n;      goto case;
-			case '8':     ++n;      goto case;
-			case '7':     ++n;      goto case;
-			case '6':     ++n;      goto case;
-			case '5':     ++n;      goto case;
-			case '4':     ++n;      goto case;
-			case '3':     ++n;      goto case;
-			case '2':     ++n;      goto case;
-			case '1':     ++n;      goto case;
-			case '0':     break;
-			default: n = 100; break;
-		}
-		if (n >= radix) break;
-		c *= radix;
-		c += n;
-		s = s[1..$];
-	}
-	if (!isChar(c))
-		failCheck(s,format("U+%04X is not a legal character",c));
-	if (s.length == 0 || s[0] != ';')
-		failCheck(s,"expected ;");
-	else
-		s = s[1..$];
-}
 /**
  * Mode to use for decoding.
  *
@@ -529,14 +436,14 @@ enum DecodeMode
  *
  * Returns: The decoded string
  *
- * Examples:
+ * Example:
  * --------------
  * writefln(decode("a &gt; b")); // writes "a > b"
  * --------------
  */
-string decode(string s, DecodeMode mode=DecodeMode.LOOSE)
+string decode(string s, DecodeMode mode=DecodeMode.LOOSE) @system pure
 {
-    import std.utf : encode;
+    import std.algorithm.searching : startsWith;
 
     if (mode == DecodeMode.NONE) return s;
 
@@ -562,10 +469,11 @@ string decode(string s, DecodeMode mode=DecodeMode.LOOSE)
                     string t = s[i..$];
                     checkCharRef(t, d);
                     char[4] temp;
-                    buffer ~= temp[0 .. std.utf.encode(temp, d)];
+                    import std.utf : encode;
+                    buffer ~= temp[0 .. encode(temp, d)];
                     i = s.length - t.length - 1;
                 }
-                catch(Err e)
+                catch (Err e)
                 {
                     if (mode == DecodeMode.STRICT)
                         throw new DecodeException("Unescaped &");
@@ -588,9 +496,9 @@ string decode(string s, DecodeMode mode=DecodeMode.LOOSE)
     return (buffer.length == 0) ? s : cast(string)buffer;
 }
 
-unittest
+@system pure unittest
 {
-    void assertNot(string s)
+    void assertNot(string s) pure
     {
         bool b = false;
         try { decode(s,DecodeMode.STRICT); }
@@ -686,7 +594,7 @@ class Document : Element
         /**
          * Compares two Documents for equality
          *
-         * Examples:
+         * Example:
          * --------------
          * Document d1,d2;
          * if (d1 == d2) { }
@@ -695,11 +603,9 @@ class Document : Element
         override bool opEquals(Object o)
         {
             const doc = toType!(const Document)(o);
-            return
-                (prolog != doc.prolog            ) ? false : (
-                (super  != cast(const Element)doc) ? false : (
-                (epilog != doc.epilog            ) ? false : (
-            true )));
+            return prolog == doc.prolog
+                && (cast()this).Element.opEquals(cast()doc)
+                && epilog == doc.epilog;
         }
 
         /**
@@ -708,7 +614,7 @@ class Document : Element
          * You should rarely need to call this function. It exists so that
          * Documents can be used as associative array keys.
          *
-         * Examples:
+         * Example:
          * --------------
          * Document d1,d2;
          * if (d1 < d2) { }
@@ -717,14 +623,13 @@ class Document : Element
         override int opCmp(Object o)
         {
             const doc = toType!(const Document)(o);
-            return
-                ((prolog != doc.prolog            )
-                    ? ( prolog < doc.prolog             ? -1 : 1 ) :
-                ((super  != cast(const Element)doc)
-                    ? ( cast()super  < cast()cast(const Element)doc ? -1 : 1 ) :
-                ((epilog != doc.epilog            )
-                    ? ( epilog < doc.epilog             ? -1 : 1 ) :
-            0 )));
+            if (prolog != doc.prolog)
+                return prolog < doc.prolog ? -1 : 1;
+            if (int cmp = (cast()this).Element.opCmp(cast()doc))
+                return cmp;
+            if (epilog != doc.epilog)
+                return epilog < doc.epilog ? -1 : 1;
+            return 0;
         }
 
         /**
@@ -735,7 +640,7 @@ class Document : Element
          */
         override size_t toHash() @trusted
         {
-            return hash(prolog, hash(epilog, (cast()super).toHash()));
+            return hash(prolog, hash(epilog, (cast()this).Element.toHash()));
         }
 
         /**
@@ -749,6 +654,24 @@ class Document : Element
     }
 }
 
+@system unittest
+{
+    // https://issues.dlang.org/show_bug.cgi?id=14966
+    auto xml = `<?xml version="1.0" encoding="UTF-8"?><foo></foo>`;
+
+    auto a = new Document(xml);
+    auto b = new Document(xml);
+    assert(a == b);
+    assert(!(a < b));
+    int[Document] aa;
+    aa[a] = 1;
+    assert(aa[b] == 1);
+
+    b ~= new Element("b");
+    assert(a < b);
+    assert(b > a);
+}
+
 /**
  * Class representing an XML element.
  *
@@ -756,11 +679,8 @@ class Document : Element
  */
 class Element : Item
 {
-	string tagName;
-	string tagString;
-    string[string] attribute;
-	TagType			etype;
 
+    Tag tag; /// The start tag of the element
     Item[] items; /// The element's items
     Text[] texts; /// The element's text items
     CData[] cdatas; /// The element's CData items
@@ -768,45 +688,6 @@ class Element : Item
     ProcessingInstruction[] pis; /// The element's processing instructions
     Element[] elements; /// The element's child elements
 
-	version(GC_STATS)
-    {
-        mixin GC_statistics;
-        static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-    }
-
-	override void explode()
-	{
-		tagName = null;
-		attribute = null;
-		tagString = null;
-
-		foreach ( item ; items)
-		{
-			item.explode();
-			destroy(item);
-		}
-		items = [];
-		texts = [];
-		cdatas = [];
-		comments = [];
-		elements = [];
-		pis = [];
-
-
-	}
-
-	version(GC_STATS)
-	{
-		~this()
-		{
-			gcStatsSum.dec();
-
-
-		}
-	}
     /**
      * Constructs an Element given a name and a string to be used as a Text
      * interior.
@@ -815,19 +696,16 @@ class Element : Item
      *      name = the name of the element.
      *      interior = (optional) the string interior.
      *
-     * Examples:
+     * Example:
      * -------------------------------------------------------
      * auto element = new Element("title","Serenity")
      *     // constructs the element <title>Serenity</title>
      * -------------------------------------------------------
      */
-    this(string name, string interior=null)
+    this(string name, string interior=null) @safe //pure
     {
         this(new Tag(name));
         if (interior.length != 0) opCatAssign(new Text(interior));
-		version (GC_STATS)
-			gcStatsSum.inc();
-
     }
 
     /**
@@ -836,41 +714,27 @@ class Element : Item
      * Params:
      *      tag_ = the start or empty tag of the element.
      */
-    this(const(Tag) tag_)
+    this(const(Tag) tag_) @safe //pure
     {
-        tagName = tag_.name;
-        foreach(k,v;tag_.attr) attribute[k] = v;
-        tagString = tag_.tagString;
-		etype = tag_.type;
-
-		version (GC_STATS)
-			gcStatsSum.inc();
-
+        this.tag = new Tag(tag_.name);
+        tag.type = TagType.EMPTY;
+        foreach (k,v;tag_.attr) tag.attr[k] = v;
+        tag.tagString = tag_.tagString;
     }
-    this(const ref TagData tag_)
-    {
-        tagName = tag_.name;
-        foreach(k,v;tag_.attr) attribute[k] = v;
-        tagString = tag_.tagString;
-		etype = tag_.type;
 
-		version (GC_STATS)
-			gcStatsSum.inc();
-
-    }
     /**
      * Append a text item to the interior of this element
      *
      * Params:
      *      item = the item you wish to append.
      *
-     * Examples:
+     * Example:
      * --------------
      * Element element;
      * element ~= new Text("hello");
      * --------------
      */
-    void opCatAssign(Text item)
+    void opCatAssign(Text item) @safe pure
     {
         texts ~= item;
         appendItem(item);
@@ -882,13 +746,13 @@ class Element : Item
      * Params:
      *      item = the item you wish to append.
      *
-     * Examples:
+     * Example:
      * --------------
      * Element element;
      * element ~= new CData("hello");
      * --------------
      */
-    void opCatAssign(CData item)
+    void opCatAssign(CData item) @safe pure
     {
         cdatas ~= item;
         appendItem(item);
@@ -900,13 +764,13 @@ class Element : Item
      * Params:
      *      item = the item you wish to append.
      *
-     * Examples:
+     * Example:
      * --------------
      * Element element;
      * element ~= new Comment("hello");
      * --------------
      */
-    void opCatAssign(Comment item)
+    void opCatAssign(Comment item) @safe pure
     {
         comments ~= item;
         appendItem(item);
@@ -918,13 +782,13 @@ class Element : Item
      * Params:
      *      item = the item you wish to append.
      *
-     * Examples:
+     * Example:
      * --------------
      * Element element;
      * element ~= new ProcessingInstruction("hello");
      * --------------
      */
-    void opCatAssign(ProcessingInstruction item)
+    void opCatAssign(ProcessingInstruction item) @safe pure
     {
         pis ~= item;
         appendItem(item);
@@ -936,7 +800,7 @@ class Element : Item
      * Params:
      *      item = the item you wish to append.
      *
-     * Examples:
+     * Example:
      * --------------
      * Element element;
      * Element other = new Element("br");
@@ -944,17 +808,17 @@ class Element : Item
      *    // appends element representing <br />
      * --------------
      */
-    void opCatAssign(Element item)
+    void opCatAssign(Element item) @safe pure
     {
         elements ~= item;
         appendItem(item);
     }
 
-    private void appendItem(Item item)
+    private void appendItem(Item item) @safe pure
     {
         items ~= item;
-        if (etype == TagType.EMPTY && !item.isEmptyXML)
-            etype = TagType.START;
+        if (tag.type == TagType.EMPTY && !item.isEmptyXML)
+            tag.type = TagType.START;
     }
 
     private void parse(ElementParser xml)
@@ -977,7 +841,7 @@ class Element : Item
     /**
      * Compares two Elements for equality
      *
-     * Examples:
+     * Example:
      * --------------
      * Element e1,e2;
      * if (e1 == e2) { }
@@ -986,7 +850,7 @@ class Element : Item
     override bool opEquals(Object o)
     {
         const element = toType!(const Element)(o);
-        auto len = items.length;
+        immutable len = items.length;
         if (len != element.items.length) return false;
         foreach (i; 0 .. len)
         {
@@ -1001,7 +865,7 @@ class Element : Item
      * You should rarely need to call this function. It exists so that Elements
      * can be used as associative array keys.
      *
-     * Examples:
+     * Example:
      * --------------
      * Element e1,e2;
      * if (e1 < e2) { }
@@ -1028,8 +892,8 @@ class Element : Item
      */
     override size_t toHash() const
     {
-		size_t hash =  typeid(tagName).getHash(&tagName);
-        foreach(item;items) hash += item.toHash();
+        size_t hash = tag.toHash();
+        foreach (item;items) hash += item.toHash();
         return hash;
     }
 
@@ -1050,7 +914,7 @@ class Element : Item
         string text(DecodeMode mode=DecodeMode.LOOSE)
         {
             string buffer;
-            foreach(item;items)
+            foreach (item;items)
             {
                 Text t = cast(Text)item;
                 if (t is null) throw new DecodeException(item.toString());
@@ -1068,35 +932,37 @@ class Element : Item
          */
         override string[] pretty(uint indent=2)
         {
+            import std.algorithm.searching : count;
+            import std.string : rightJustify;
 
-            if (isEmptyXML) return [ toEmptyString() ];
+            if (isEmptyXML) return [ tag.toEmptyString() ];
 
             if (items.length == 1)
             {
                 Text t = cast(Text)(items[0]);
                 if (t !is null)
                 {
-                    return [toStartString() ~ t.toString() ~ toEndString()];
+                    return [tag.toStartString() ~ t.toString() ~ tag.toEndString()];
                 }
             }
 
-            string[] a = [ toStartString() ];
-            foreach(item;items)
+            string[] a = [ tag.toStartString() ];
+            foreach (item;items)
             {
                 string[] b = item.pretty(indent);
-                foreach(s;b)
+                foreach (s;b)
                 {
                     a ~= rightJustify(s,count(s) + indent);
                 }
             }
-            a ~= toEndString();
+            a ~= tag.toEndString();
             return a;
         }
 
         /**
          * Returns the string representation of an Element
          *
-         * Examples:
+         * Example:
          * --------------
          * auto element = new Element("br");
          * writefln(element.toString()); // writes "<br />"
@@ -1104,32 +970,16 @@ class Element : Item
          */
         override string toString()
         {
-            if (isEmptyXML) return toEmptyString();
+            if (isEmptyXML) return tag.toEmptyString();
 
-            string buffer = toStartString();
+            string buffer = tag.toStartString();
             foreach (item;items) { buffer ~= item.toString(); }
-            buffer ~= toEndString();
+            buffer ~= tag.toEndString();
             return buffer;
         }
 
-        override @property bool isEmptyXML() { return items.length == 0; }
+        override @property @safe pure @nogc nothrow bool isEmptyXML() { return items.length == 0; }
     }
-
-	private {
-		string toNonEndString() const
-		{
-			string s = "<" ~ tagName;
-			foreach(key,val;attribute)
-				s ~= format(" %s=\"%s\"",key,encode(val));
-			return s;
-		}
-
-		string toStartString()  const { return toNonEndString() ~ ">"; }
-
-		string toEndString()  const { return "</" ~ tagName ~ ">"; }
-
-		string toEmptyString()  const { return toNonEndString() ~ " />"; }
-	}
 }
 
 /**
@@ -1154,108 +1004,47 @@ enum TagType { START, END, EMPTY }
  * <li> that each attribute name consists of valid characters</li>
  * </ul>
  */
-
-// just for the parse
-struct TagData {
-	TagType type = TagType.START;   /// Type of tag
-    string name;                    /// Tag name
-    string[string] attr;            /// Associative array of attributes
-    private string tagString;
-
-	@property bool isStart() const { return type == TagType.START; }
-
-	@property bool isEnd() const  { return type == TagType.END;   }
-
-	@property bool isEmpty() const { return type == TagType.EMPTY; }
-
-	private this(ref string s, bool dummy)
-    {
-        tagString = s;
-        try
-        {
-            reqc(s,'<');
-            if (optc(s,'/')) type = TagType.END;
-            name = munch(s,"^/>"~whitespace);
-            munch(s,whitespace);
-            while(s.length > 0 && s[0] != '>' && s[0] != '/')
-            {
-                string key = munch(s,"^="~whitespace);
-                munch(s,whitespace);
-                reqc(s,'=');
-                munch(s,whitespace);
-                reqc(s,'"');
-                string val = decode(munch(s,"^\""), DecodeMode.LOOSE);
-                reqc(s,'"');
-                munch(s,whitespace);
-                attr[key] = val;
-            }
-            if (optc(s,'/'))
-            {
-                if (type == TagType.END) throw new TagException("");
-                type = TagType.EMPTY;
-            }
-            reqc(s,'>');
-            tagString.length = (s.ptr - tagString.ptr);
-        }
-        catch(XMLException e)
-        {
-            tagString.length = (s.ptr - tagString.ptr);
-            throw new TagException(tagString);
-        }
-    }
-
-}
-
 class Tag
 {
     TagType type = TagType.START;   /// Type of tag
     string name;                    /// Tag name
     string[string] attr;            /// Associative array of attributes
     private string tagString;
-	version(GC_STATS)
+
+    version(GC_STATS)
     {
         mixin GC_statistics;
         static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-		/// construct
-		version(GC_STATS)
-		{
-			~this()
-			{
-				gcStatsSum.dec();
-				attr = null;
-				tagString = null;
-				name = null;
-			}
-		}
-
-
-
-		this()
-		{
-			version(GC_STATS)
-				gcStatsSum.inc();
-		}
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
+        ~this()
+        {
+            gcStatsSum.dec();
+        }
     }
-	this(ref TagData c)
-	{
-		version(GC_STATS)
-			gcStatsSum.inc();
-		attr = c.attr;
-		tagString = c.tagString;
-		type = c.type;
-		name = c.name;
-	}
-	void explode()
-	{
-		tagString = [];
-		foreach(k ; attr.byKey())
-		{
-			attr.remove(k);
-		}
-	}
+
+    invariant()
+    {
+        string s;
+        string t;
+
+        assert(type == TagType.START
+            || type == TagType.END
+            || type == TagType.EMPTY);
+
+        s = name;
+        try { checkName(s,t); }
+        catch (Err e) { assert(false,"Invalid tag name:" ~ e.toString()); }
+
+        foreach (k,v;attr)
+        {
+            s = k;
+            try { checkName(s,t); }
+            catch (Err e)
+                { assert(false,"Invalid atrribute name:" ~ e.toString()); }
+        }
+    }
 
     /**
      * Constructs an instance of Tag with a specified name and type
@@ -1268,19 +1057,18 @@ class Tag
      *      type = (optional) the Tag's type. If omitted, defaults to
      *          TagType.START.
      *
-     * Examples:
+     * Example:
      * --------------
      * auto tag = new Tag("img",Tag.EMPTY);
      * tag.attr["src"] = "http://example.com/example.jpg";
      * --------------
      */
-    this(string name, TagType type=TagType.START)
+    this(string name, TagType type=TagType.START) @safe //pure
     {
+        version(GC_STATS)
+            gcStatsSum.inc();
         this.name = name;
         this.type = type;
-		version(GC_STATS)
-			gcStatsSum.inc();
-
     }
 
     /* Private constructor (so don't ddoc this!)
@@ -1293,7 +1081,48 @@ class Tag
      * The second parameter is a dummy parameter only, required solely to
      * distinguish this constructor from the public one.
      */
+    private this(ref string s, bool dummy) @system
+    {
+        import std.ascii : whitespace;
+        import std.string : munch;
 
+        version(GC_STATS)
+            gcStatsSum.inc();
+        // @system because of decode
+        tagString = s;
+        try
+        {
+            reqc(s,'<');
+            if (optc(s,'/')) type = TagType.END;
+            name = munch(s,"^/>"~whitespace);
+            munch(s,whitespace);
+            while (s.length > 0 && s[0] != '>' && s[0] != '/')
+            {
+                string key = munch(s,"^="~whitespace);
+                munch(s,whitespace);
+                reqc(s,'=');
+                munch(s,whitespace);
+                immutable char quote = requireOneOf(s,"'\"");
+                char[2] notQuote = ['^', quote];
+                string val = decode(munch(s,notQuote[]), DecodeMode.LOOSE);
+                reqc(s,quote);
+                munch(s,whitespace);
+                attr[key] = val;
+            }
+            if (optc(s,'/'))
+            {
+                if (type == TagType.END) throw new TagException("");
+                type = TagType.EMPTY;
+            }
+            reqc(s,'>');
+            tagString.length = (s.ptr - tagString.ptr);
+        }
+        catch (XMLException e)
+        {
+            tagString.length = (s.ptr - tagString.ptr);
+            throw new TagException(tagString);
+        }
+    }
 
     const
     {
@@ -1303,7 +1132,7 @@ class Tag
          * You should rarely need to call this function. It exists so that Tags
          * can be used as associative array keys.
          *
-         * Examples:
+         * Example:
          * --------------
          * Tag tag1,tag2
          * if (tag1 == tag2) { }
@@ -1322,7 +1151,7 @@ class Tag
         /**
          * Compares two Tags
          *
-         * Examples:
+         * Example:
          * --------------
          * Tag tag1,tag2
          * if (tag1 < tag2) { }
@@ -1353,7 +1182,7 @@ class Tag
         /**
          * Returns the string representation of a Tag
          *
-         * Examples:
+         * Example:
          * --------------
          * auto tag = new Tag("book",TagType.START);
          * writefln(tag.toString()); // writes "<book>"
@@ -1367,50 +1196,52 @@ class Tag
 
         private
         {
-			string toNonEndString() const
-			{
-				string s = "<" ~ name;
-				foreach(key,val;attr)
-					s ~= format(" %s=\"%s\"",key,encode(val));
-				return s;
-			}
+            string toNonEndString()
+            {
+                import std.format : format;
 
-			string toStartString()  const { return toNonEndString() ~ ">"; }
+                string s = "<" ~ name;
+                foreach (key,val;attr)
+                    s ~= format(" %s=\"%s\"",key,encode(val));
+                return s;
+            }
 
-			string toEndString()  const { return "</" ~ name ~ ">"; }
+            string toStartString() { return toNonEndString() ~ ">"; }
 
-			string toEmptyString()  const { return toNonEndString() ~ " />"; }
+            string toEndString() { return "</" ~ name ~ ">"; }
+
+            string toEmptyString() { return toNonEndString() ~ " />"; }
         }
 
         /**
          * Returns true if the Tag is a start tag
          *
-         * Examples:
+         * Example:
          * --------------
          * if (tag.isStart) { }
          * --------------
          */
-        @property bool isStart() const { return type == TagType.START; }
+        @property bool isStart() @safe @nogc pure nothrow { return type == TagType.START; }
 
         /**
          * Returns true if the Tag is an end tag
          *
-         * Examples:
+         * Example:
          * --------------
          * if (tag.isEnd) { }
          * --------------
          */
-        @property bool isEnd() const  { return type == TagType.END;   }
+        @property bool isEnd() @safe @nogc pure nothrow { return type == TagType.END;   }
 
         /**
          * Returns true if the Tag is an empty tag
          *
-         * Examples:
+         * Example:
          * --------------
          * if (tag.isEmpty) { }
          * --------------
          */
-        @property bool isEmpty() const { return type == TagType.EMPTY; }
+        @property bool isEmpty() @safe @nogc pure nothrow { return type == TagType.EMPTY; }
     }
 }
 
@@ -1430,15 +1261,17 @@ class Comment : Item
      * Throws: CommentException if the comment body is illegal (contains "--"
      * or exactly equals "-")
      *
-     * Examples:
+     * Example:
      * --------------
      * auto item = new Comment("This is a comment");
      *    // constructs <!--This is a comment-->
      * --------------
      */
-    this(string content)
+    this(string content) @safe //pure
     {
-        if (content == "-" || content.indexOf("==") != -1)
+        import std.string : indexOf;
+
+        if (content == "-" || content.indexOf("--") != -1)
             throw new CommentException(content);
         this.content = content;
     }
@@ -1446,7 +1279,7 @@ class Comment : Item
     /**
      * Compares two comments for equality
      *
-     * Examples:
+     * Example:
      * --------------
      * Comment item1,item2;
      * if (item1 == item2) { }
@@ -1465,7 +1298,7 @@ class Comment : Item
      * You should rarely need to call this function. It exists so that Comments
      * can be used as associative array keys.
      *
-     * Examples:
+     * Example:
      * --------------
      * Comment item1,item2;
      * if (item1 < item2) { }
@@ -1485,14 +1318,22 @@ class Comment : Item
      * You should rarely need to call this function. It exists so that Comments
      * can be used as associative array keys.
      */
-    override size_t toHash() const { return hash(content); }
+    override size_t toHash() const nothrow { return hash(content); }
 
     /**
      * Returns a string representation of this comment
      */
-    override string toString() const { return "<!--" ~ content ~ "-->"; }
+    override string toString() const @safe pure nothrow { return "<!--" ~ content ~ "-->"; }
 
-    override @property bool isEmptyXML() const { return false; } /// Returns false always
+    override @property @safe @nogc pure nothrow bool isEmptyXML() const { return false; } /// Returns false always
+}
+
+unittest // issue 16241
+{
+    import std.exception : assertThrown;
+    auto c = new Comment("==");
+    assert(c.content == "==");
+    assertThrown!CommentException(new Comment("--"));
 }
 
 /**
@@ -1510,14 +1351,15 @@ class CData : Item
      *
      * Throws: CDataException if the segment body is illegal (contains "]]>")
      *
-     * Examples:
+     * Example:
      * --------------
      * auto item = new CData("<b>hello</b>");
      *    // constructs <![CDATA[<b>hello</b>]]>
      * --------------
      */
-    this(string content)
+    this(string content) @safe //pure
     {
+        import std.string : indexOf;
         if (content.indexOf("]]>") != -1) throw new CDataException(content);
         this.content = content;
     }
@@ -1525,7 +1367,7 @@ class CData : Item
     /**
      * Compares two CDatas for equality
      *
-     * Examples:
+     * Example:
      * --------------
      * CData item1,item2;
      * if (item1 == item2) { }
@@ -1544,7 +1386,7 @@ class CData : Item
      * You should rarely need to call this function. It exists so that CDatas
      * can be used as associative array keys.
      *
-     * Examples:
+     * Example:
      * --------------
      * CData item1,item2;
      * if (item1 < item2) { }
@@ -1564,14 +1406,14 @@ class CData : Item
      * You should rarely need to call this function. It exists so that CDatas
      * can be used as associative array keys.
      */
-    override size_t toHash() const { return hash(content); }
+    override size_t toHash() const nothrow { return hash(content); }
 
     /**
      * Returns a string representation of this CData section
      */
-    override string toString() const { return cdata ~ content ~ "]]>"; }
+    override string toString() const @safe pure nothrow { return cdata ~ content ~ "]]>"; }
 
-    override @property bool isEmptyXML() const { return false; } /// Returns false always
+    override @property @safe @nogc pure nothrow bool isEmptyXML() const { return false; } /// Returns false always
 }
 
 /**
@@ -1588,13 +1430,13 @@ class Text : Item
      *      content = the text. This function encodes the text before
      *      insertion, so it is safe to insert any text
      *
-     * Examples:
+     * Example:
      * --------------
      * auto Text = new CData("a < b");
      *    // constructs a &lt; b
      * --------------
      */
-    this(string content)
+    this(string content) @safe // pure
     {
         this.content = encode(content);
     }
@@ -1602,7 +1444,7 @@ class Text : Item
     /**
      * Compares two text sections for equality
      *
-     * Examples:
+     * Example:
      * --------------
      * Text item1,item2;
      * if (item1 == item2) { }
@@ -1621,7 +1463,7 @@ class Text : Item
      * You should rarely need to call this function. It exists so that Texts
      * can be used as associative array keys.
      *
-     * Examples:
+     * Example:
      * --------------
      * Text item1,item2;
      * if (item1 < item2) { }
@@ -1641,17 +1483,17 @@ class Text : Item
      * You should rarely need to call this function. It exists so that Texts
      * can be used as associative array keys.
      */
-    override size_t toHash() const { return hash(content); }
+    override size_t toHash() const nothrow { return hash(content); }
 
     /**
      * Returns a string representation of this Text section
      */
-    override string toString() const { return content; }
+    override string toString() const @safe @nogc pure nothrow { return content; }
 
     /**
      * Returns true if the content is the empty string
      */
-    override @property bool isEmptyXML() const { return content.length == 0; }
+    override @property @safe @nogc pure nothrow bool isEmptyXML() const { return content.length == 0; }
 }
 
 /**
@@ -1669,14 +1511,15 @@ class XMLInstruction : Item
      *
      * Throws: XIException if the segment body is illegal (contains ">")
      *
-     * Examples:
+     * Example:
      * --------------
      * auto item = new XMLInstruction("ATTLIST");
      *    // constructs <!ATTLIST>
      * --------------
      */
-    this(string content)
+    this(string content) @safe //pure
     {
+        import std.string : indexOf;
         if (content.indexOf(">") != -1) throw new XIException(content);
         this.content = content;
     }
@@ -1684,7 +1527,7 @@ class XMLInstruction : Item
     /**
      * Compares two XML instructions for equality
      *
-     * Examples:
+     * Example:
      * --------------
      * XMLInstruction item1,item2;
      * if (item1 == item2) { }
@@ -1703,7 +1546,7 @@ class XMLInstruction : Item
      * You should rarely need to call this function. It exists so that
      * XmlInstructions can be used as associative array keys.
      *
-     * Examples:
+     * Example:
      * --------------
      * XMLInstruction item1,item2;
      * if (item1 < item2) { }
@@ -1723,14 +1566,14 @@ class XMLInstruction : Item
      * You should rarely need to call this function. It exists so that
      * XmlInstructions can be used as associative array keys.
      */
-    override size_t toHash() const { return hash(content); }
+    override size_t toHash() const nothrow { return hash(content); }
 
     /**
      * Returns a string representation of this XmlInstruction
      */
-    override string toString() const { return "<!" ~ content ~ ">"; }
+    override string toString() const @safe pure nothrow { return "<!" ~ content ~ ">"; }
 
-    override @property bool isEmptyXML() const { return false; } /// Returns false always
+    override @property @safe @nogc pure nothrow bool isEmptyXML() const { return false; } /// Returns false always
 }
 
 /**
@@ -1748,14 +1591,15 @@ class ProcessingInstruction : Item
      *
      * Throws: PIException if the segment body is illegal (contains "?>")
      *
-     * Examples:
+     * Example:
      * --------------
      * auto item = new ProcessingInstruction("php");
      *    // constructs <?php?>
      * --------------
      */
-    this(string content)
+    this(string content) @safe //pure
     {
+        import std.string : indexOf;
         if (content.indexOf("?>") != -1) throw new PIException(content);
         this.content = content;
     }
@@ -1763,7 +1607,7 @@ class ProcessingInstruction : Item
     /**
      * Compares two processing instructions for equality
      *
-     * Examples:
+     * Example:
      * --------------
      * ProcessingInstruction item1,item2;
      * if (item1 == item2) { }
@@ -1782,7 +1626,7 @@ class ProcessingInstruction : Item
      * You should rarely need to call this function. It exists so that
      * ProcessingInstructions can be used as associative array keys.
      *
-     * Examples:
+     * Example:
      * --------------
      * ProcessingInstruction item1,item2;
      * if (item1 < item2) { }
@@ -1802,14 +1646,14 @@ class ProcessingInstruction : Item
      * You should rarely need to call this function. It exists so that
      * ProcessingInstructions can be used as associative array keys.
      */
-    override size_t toHash() const { return hash(content); }
+    override size_t toHash() const nothrow { return hash(content); }
 
     /**
      * Returns a string representation of this ProcessingInstruction
      */
-    override string toString() const { return "<?" ~ content ~ "?>"; }
+    override string toString() const @safe pure nothrow { return "<?" ~ content ~ "?>"; }
 
-    override @property bool isEmptyXML() const { return false; } /// Returns false always
+    override @property @safe @nogc pure nothrow bool isEmptyXML() const { return false; } /// Returns false always
 }
 
 /**
@@ -1817,28 +1661,24 @@ class ProcessingInstruction : Item
  */
 abstract class Item
 {
-	version(GC_STATS)
+    version(GC_STATS)
     {
         mixin GC_statistics;
         static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-		/// construct
-		version(GC_STATS)
-		{
-			~this()
-			{
-				gcStatsSum.dec();
-			}
-		}
-		this()
-		{
-			version(GC_STATS)
-				gcStatsSum.inc();
-		}
-    }
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
 
+        ~this()
+        {
+                gcStatsSum.dec();
+        }
+
+        this() @safe
+        {
+                gcStatsSum.inc();
+        }
+    }
     /// Compares with another Item of same type for equality
     abstract override bool opEquals(Object o);
 
@@ -1859,14 +1699,13 @@ abstract class Item
      */
     string[] pretty(uint indent) const
     {
+        import std.string : strip;
         string s = strip(toString());
         return s.length == 0 ? [] : [ s ];
     }
 
     /// Returns true if the item represents empty XML text
-    abstract @property bool isEmptyXML() const;
-
-	void explode(){}
+    abstract @property @safe @nogc pure nothrow bool isEmptyXML() const;
 }
 
 /**
@@ -1901,11 +1740,9 @@ class DocumentParser : ElementParser
     in
     {
         assert(xmlText_.length != 0);
-        /* // takes far too long
-		try
+        try
         {
             // Confirm that the input is valid XML
-
             check(xmlText_);
         }
         catch (CheckException e)
@@ -1913,7 +1750,6 @@ class DocumentParser : ElementParser
             // And if it's not, tell the user why not
             assert(false, "\n" ~ e.toString());
         }
-		*/
     }
     body
     {
@@ -1937,48 +1773,22 @@ class DocumentParser : ElementParser
  */
 class ElementParser
 {
-	version(GC_STATS)
-    {
-        mixin GC_statistics;
-        static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-    }
-
-	void explode()
-	{
-		destroy(tag_);
-		elementStart = null;
-		s = null;
-		commentHandler = null;
-		cdataHandler = null;
-		xiHandler = null;
-		piHandler = null;
-		rawTextHandler = null;
-		textHandler = null;
-		if (onStartTag !is null)
-		{
-			foreach(sh ; onStartTag.byKey())
-			{
-				onStartTag.remove(sh);
-			}
-		}
-		onStartTag = null;
-	}
-
-	version(GC_STATS)
-	{
-		~this()
-		{
-			explode();
-			gcStatsSum.dec();
-		}
-	}
     alias Handler = void delegate(string);
     alias ElementHandler = void delegate(in Element element);
     alias ParserHandler = void delegate(ElementParser parser);
+    version(GC_STATS)
+    {
+        mixin GC_statistics;
+        static this()
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
 
+        ~this()
+        {
+                gcStatsSum.dec();
+        }
+    }
     private
     {
         Tag tag_;
@@ -1993,20 +1803,21 @@ class ElementParser
         Handler textHandler = null;
 
         // Private constructor for start tags
-        this(ElementParser parent, ref TagData t)
+        this(ElementParser parent) @safe @nogc //pure nothrow
         {
+
             s = parent.s;
             this();
-            tag_ = new Tag(t);
+            tag_ = parent.tag_;
         }
 
         // Private constructor for empty tags
-        this(ref TagData t, string* xml)
+        this(Tag tag, string* t) @safe @nogc //pure nothrow
         {
-            s = xml;
-            this();
-			tag_ = new Tag(t);
 
+            s = t;
+            this();
+            tag_ = tag;
         }
     }
 
@@ -2014,7 +1825,7 @@ class ElementParser
      * The Tag at the start of the element being parsed. You can read this to
      * determine the tag's name and attributes.
      */
-    @property const(Tag) tag() const { return tag_; }
+    @property @safe @nogc pure nothrow const(Tag) tag() const { return tag_; }
 
     /**
      * Register a handler which will be called whenever a start tag is
@@ -2022,7 +1833,7 @@ class ElementParser
      * the name, in which case the handler will be called for any unmatched
      * start tag.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever a <podcast> start tag is encountered
      * onStartTag["podcast"] = (ElementParser xml)
@@ -2058,7 +1869,7 @@ class ElementParser
      * the name, in which case the handler will be called for any unmatched
      * end tag.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever a </podcast> end tag is encountered
      * onEndTag["podcast"] = (in Element e)
@@ -2083,18 +1894,17 @@ class ElementParser
      */
     ElementHandler[string] onEndTag;
 
-    protected this()
+    protected this() @safe @nogc //pure nothrow
     {
+        version(GC_STATS)
+                gcStatsSum.inc();
         elementStart = *s;
-		version(GC_STATS)
-			gcStatsSum.inc();
-
     }
 
     /**
      * Register a handler which will be called whenever text is encountered.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever text is encountered
      * onText = (string s)
@@ -2109,7 +1919,7 @@ class ElementParser
      * };
      * --------------
      */
-    @property void onText(Handler handler) { textHandler = handler; }
+    @property @safe @nogc pure nothrow void onText(Handler handler) { textHandler = handler; }
 
     /**
      * Register an alternative handler which will be called whenever text
@@ -2121,7 +1931,7 @@ class ElementParser
      * probably want to use onTextRaw only in circumstances where you
      * know that decoding is unnecessary.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever text is encountered
      * onText = (string s)
@@ -2135,13 +1945,13 @@ class ElementParser
      * };
      * --------------
      */
-    void onTextRaw(Handler handler) { rawTextHandler = handler; }
+    @safe @nogc pure nothrow void onTextRaw(Handler handler) { rawTextHandler = handler; }
 
     /**
      * Register a handler which will be called whenever a character data
      * segment is encountered.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever a CData section is encountered
      * onCData = (string s)
@@ -2156,13 +1966,13 @@ class ElementParser
      * };
      * --------------
      */
-    @property void onCData(Handler handler) { cdataHandler = handler; }
+    @property @safe @nogc pure nothrow void onCData(Handler handler) { cdataHandler = handler; }
 
     /**
      * Register a handler which will be called whenever a comment is
      * encountered.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever a comment is encountered
      * onComment = (string s)
@@ -2177,13 +1987,13 @@ class ElementParser
      * };
      * --------------
      */
-    @property void onComment(Handler handler) { commentHandler = handler; }
+    @property @safe @nogc pure nothrow void onComment(Handler handler) { commentHandler = handler; }
 
     /**
      * Register a handler which will be called whenever a processing
      * instruction is encountered.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever a processing instruction is encountered
      * onPI = (string s)
@@ -2198,13 +2008,13 @@ class ElementParser
      * };
      * --------------
      */
-    @property void onPI(Handler handler) { piHandler = handler; }
+    @property @safe @nogc pure nothrow void onPI(Handler handler) { piHandler = handler; }
 
     /**
      * Register a handler which will be called whenever an XML instruction is
      * encountered.
      *
-     * Examples:
+     * Example:
      * --------------
      * // Call this function whenever an XML instruction is encountered
      * // (Note: XML instructions may only occur preceding the root tag of a
@@ -2221,7 +2031,7 @@ class ElementParser
      * };
      * --------------
      */
-    @property void onXI(Handler handler) { xiHandler = handler; }
+    @property @safe @nogc pure nothrow void onXI(Handler handler) { xiHandler = handler; }
 
     /**
      * Parse an XML element.
@@ -2234,22 +2044,15 @@ class ElementParser
      */
     void parse()
     {
-        string t;
-		Appender!(Tag[])  tagStack;
-		scope(exit)
-		{
-			auto tags = tagStack.data;
-			auto slen = tags.length;
-			while (slen > 0)
-			{
-				slen -= 1;
-				auto oldtag = tags[slen];
-				tagStack.shrinkTo(slen);
-				destroy(oldtag);
-			}
-		}
+        import std.algorithm.searching : startsWith;
+        import std.string : indexOf;
 
-        while(s.length != 0)
+        string t;
+        const Tag root = tag_;
+        Tag[string] startTags;
+        if (tag_ !is null) startTags[tag_.name] = tag_;
+
+        while (s.length != 0)
         {
             if (startsWith(*s,"<!--"))
             {
@@ -2281,99 +2084,77 @@ class ElementParser
             }
             else if (startsWith(*s,"<"))
             {
-				TagData tdata =  TagData(*s,true); // gets all attributes
-
-				// why would it be null? - for DocumentParser
-                if (tag_ is null)
-				{
-					tag_ = new Tag(tdata);
+                tag_ = new Tag(*s,true);
+                if (root is null)
                     return; // Return to constructor of derived class
-				}
 
-				if (tdata.isStart)
-				{
-					auto handler = tdata.name in onStartTag;
-					if (handler is null)
-					{
-						 handler = null in onStartTag;
-					}
-					auto unknown = new Tag(tdata);
-					tagStack ~= unknown; // must remember this
-					if (handler !is null)
-					{
-						auto parser = new ElementParser(this,tdata);
-						(*handler)(parser);
-						parser.explode();
-						destroy(parser);
-					}
-				}
-                else if (tdata.isEnd)
+                if (tag_.isStart)
                 {
-					Tag eTag;
-					auto stack = tagStack.data;
-					auto slen = stack.length;
+                    startTags[tag_.name] = tag_;
 
-					if (slen > 0)
-					{
-						slen--;
-						eTag = stack[slen];
-						tagStack.shrinkTo(slen);
-					}
-					else
-						eTag = tag_;
-					auto handler2 = tdata.name in onEndTag;
-					if (handler2 is null)
-					{
-						handler2 = null in onEndTag;
-					}
-					if (handler2 !is null)
-					{
-						string text;
+                    auto parser = new ElementParser(this);
 
-						immutable(char)* p = eTag.tagString.ptr
-							+ eTag.tagString.length;
-						immutable(char)* q = tdata.tagString.ptr;
-						text = decode(p[0..(q-p)], DecodeMode.LOOSE);
-
-						auto element = new Element(eTag);
-						if (text.length != 0) element ~= new Text(text);
-						(*handler2)(element);
-						element.explode();
-
-					}
-					if (eTag !is tag_)
-						destroy(eTag);
-                    if (tdata.name == tag_.name)
-					{
-						return;
-					}
-                }
-                else if (tdata.isEmpty)
-                {
-                    string s2;
-                    auto handler1 = tdata.name in onStartTag;
-                    if (handler1 is null)
-					{
-						 handler1 = null in onStartTag;
-					}
-                    if (handler1 !is null)
-					{
-						auto parser = new ElementParser(tdata,&s2);
-						(*handler1)(parser);
-						parser.explode();
-						destroy(parser);
+                    auto handler = tag_.name in onStartTag;
+                    if (handler !is null) (*handler)(parser);
+                    else
+                    {
+                        handler = null in onStartTag;
+                        if (handler !is null) (*handler)(parser);
                     }
-                    auto handler2 = tdata.name in onEndTag;
-					if (handler2 is null)
-					{
-						handler2 = null in onEndTag;
-					}
-					if (handler2 !is null)
-					{   // Handle the pretend end tag
-						auto element = new Element(tdata);
-						(*handler2)(element);
-						element.explode();
-					}
+                }
+                else if (tag_.isEnd)
+                {
+                    const startTag = startTags[tag_.name];
+                    string text;
+
+                    immutable(char)* p = startTag.tagString.ptr
+                        + startTag.tagString.length;
+                    immutable(char)* q = tag_.tagString.ptr;
+                    text = decode(p[0..(q-p)], DecodeMode.LOOSE);
+
+                    auto element = new Element(startTag);
+                    if (text.length != 0) element ~= new Text(text);
+
+                    auto handler = tag_.name in onEndTag;
+                    if (handler !is null) (*handler)(element);
+                    else
+                    {
+                        handler = null in onEndTag;
+                        if (handler !is null) (*handler)(element);
+                    }
+
+                    if (tag_.name == root.name) return;
+                }
+                else if (tag_.isEmpty)
+                {
+                    Tag startTag = new Tag(tag_.name);
+
+                    // FIX by hed010gy, for bug 2979
+                    // http://d.puremagic.com/issues/show_bug.cgi?id=2979
+                    if (tag_.attr.length > 0)
+                          foreach (tn,tv; tag_.attr) startTag.attr[tn]=tv;
+                    // END FIX
+
+                    // Handle the pretend start tag
+                    string s2;
+                    auto parser = new ElementParser(startTag,&s2);
+                    auto handler1 = startTag.name in onStartTag;
+                    if (handler1 !is null) (*handler1)(parser);
+                    else
+                    {
+                        handler1 = null in onStartTag;
+                        if (handler1 !is null) (*handler1)(parser);
+                    }
+
+                    // Handle the pretend end tag
+                    auto element = new Element(startTag);
+                    auto handler2 = tag_.name in onEndTag;
+                    if (handler2 !is null) (*handler2)(element);
+                    else
+                    {
+                        handler2 = null in onEndTag;
+                        if (handler2 !is null) (*handler2)(element);
+                    }
                 }
             }
             else
@@ -2390,7 +2171,7 @@ class ElementParser
     /**
      * Returns that part of the element which has already been parsed
      */
-    override string toString() const
+    override string toString() const @nogc @safe pure nothrow
     {
         assert(elementStart.length >= s.length);
         return elementStart[0 .. elementStart.length - s.length];
@@ -2398,35 +2179,566 @@ class ElementParser
 
 }
 
+private
+{
+    template Check(string msg)
+    {
+        string old = s;
 
+        void fail() @safe pure
+        {
+            s = old;
+            throw new Err(s,msg);
+        }
+
+        void fail(Err e) @safe pure
+        {
+            s = old;
+            throw new Err(s,msg,e);
+        }
+
+        void fail(string msg2) @safe pure
+        {
+            fail(new Err(s,msg2));
+        }
+    }
+
+    void checkMisc(ref string s) @safe pure // rule 27
+    {
+        import std.algorithm.searching : startsWith;
+
+        mixin Check!("Misc");
+
+        try
+        {
+                 if (s.startsWith("<!--")) { checkComment(s); }
+            else if (s.startsWith("<?"))   { checkPI(s); }
+            else                           { checkSpace(s); }
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkDocument(ref string s) @safe pure // rule 1
+    {
+        mixin Check!("Document");
+        try
+        {
+            checkProlog(s);
+            checkElement(s);
+            star!(checkMisc)(s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkChars(ref string s) @safe pure // rule 2
+    {
+        // TO DO - Fix std.utf stride and decode functions, then use those
+        // instead
+        import std.format : format;
+
+        mixin Check!("Chars");
+
+        dchar c;
+        int n = -1;
+        foreach (int i,dchar d; s)
+        {
+            if (!isChar(d))
+            {
+                c = d;
+                n = i;
+                break;
+            }
+        }
+        if (n != -1)
+        {
+            s = s[n..$];
+            fail(format("invalid character: U+%04X",c));
+        }
+    }
+
+    void checkSpace(ref string s) @safe pure // rule 3
+    {
+        import std.string : munch;
+
+        mixin Check!("Whitespace");
+        munch(s,"\u0020\u0009\u000A\u000D");
+        if (s is old) fail();
+    }
+
+    void checkName(ref string s, out string name) @safe pure // rule 5
+    {
+        mixin Check!("Name");
+
+        if (s.length == 0) fail();
+        int n;
+        foreach (int i,dchar c;s)
+        {
+            if (c == '_' || c == ':' || isLetter(c)) continue;
+            if (i == 0) fail();
+            if (c == '-' || c == '.' || isDigit(c)
+                || isCombiningChar(c) || isExtender(c)) continue;
+            n = i;
+            break;
+        }
+        name = s[0..n];
+        s = s[n..$];
+    }
+
+    void checkAttValue(ref string s) @safe pure // rule 10
+    {
+        import std.string : munch;
+
+        mixin Check!("AttValue");
+
+        if (s.length == 0) fail();
+        char c = s[0];
+        if (c != '\u0022' && c != '\u0027')
+            fail("attribute value requires quotes");
+        s = s[1..$];
+        for (;;)
+        {
+            munch(s,"^<&"~c);
+            if (s.length == 0) fail("unterminated attribute value");
+            if (s[0] == '<') fail("< found in attribute value");
+            if (s[0] == c) break;
+            try { checkReference(s); } catch (Err e) { fail(e); }
+        }
+        s = s[1..$];
+    }
+
+    void checkCharData(ref string s) @safe pure // rule 14
+    {
+        import std.algorithm.searching : startsWith;
+
+        mixin Check!("CharData");
+
+        while (s.length != 0)
+        {
+            if (s.startsWith("&")) break;
+            if (s.startsWith("<")) break;
+            if (s.startsWith("]]>")) fail("]]> found within char data");
+            s = s[1..$];
+        }
+    }
+
+    void checkComment(ref string s) @safe pure // rule 15
+    {
+        import std.string : indexOf;
+
+        mixin Check!("Comment");
+
+        try { checkLiteral("<!--",s); } catch (Err e) { fail(e); }
+        ptrdiff_t n = s.indexOf("--");
+        if (n == -1) fail("unterminated comment");
+        s = s[n..$];
+        try { checkLiteral("-->",s); } catch (Err e) { fail(e); }
+    }
+
+    void checkPI(ref string s) @safe pure // rule 16
+    {
+        mixin Check!("PI");
+
+        try
+        {
+            checkLiteral("<?",s);
+            checkEnd("?>",s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkCDSect(ref string s) @safe pure // rule 18
+    {
+        mixin Check!("CDSect");
+
+        try
+        {
+            checkLiteral(cdata,s);
+            checkEnd("]]>",s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkProlog(ref string s) @safe pure // rule 22
+    {
+        mixin Check!("Prolog");
+
+        try
+        {
+            /* The XML declaration is optional
+             * http://www.w3.org/TR/2008/REC-xml-20081126/#NT-prolog
+             */
+            opt!(checkXMLDecl)(s);
+
+            star!(checkMisc)(s);
+            opt!(seq!(checkDocTypeDecl,star!(checkMisc)))(s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkXMLDecl(ref string s) @safe pure // rule 23
+    {
+        mixin Check!("XMLDecl");
+
+        try
+        {
+            checkLiteral("<?xml",s);
+            checkVersionInfo(s);
+            opt!(checkEncodingDecl)(s);
+            opt!(checkSDDecl)(s);
+            opt!(checkSpace)(s);
+            checkLiteral("?>",s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkVersionInfo(ref string s) @safe pure // rule 24
+    {
+        mixin Check!("VersionInfo");
+
+        try
+        {
+            checkSpace(s);
+            checkLiteral("version",s);
+            checkEq(s);
+            quoted!(checkVersionNum)(s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkEq(ref string s) @safe pure // rule 25
+    {
+        mixin Check!("Eq");
+
+        try
+        {
+            opt!(checkSpace)(s);
+            checkLiteral("=",s);
+            opt!(checkSpace)(s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkVersionNum(ref string s) @safe pure // rule 26
+    {
+        import std.string : munch;
+
+        mixin Check!("VersionNum");
+
+        munch(s,"a-zA-Z0-9_.:-");
+        if (s is old) fail();
+    }
+
+    void checkDocTypeDecl(ref string s) @safe pure // rule 28
+    {
+        mixin Check!("DocTypeDecl");
+
+        try
+        {
+            checkLiteral("<!DOCTYPE",s);
+            //
+            // TO DO -- ensure DOCTYPE is well formed
+            // (But not yet. That's one of our "future directions")
+            //
+            checkEnd(">",s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkSDDecl(ref string s) @safe pure // rule 32
+    {
+        import std.algorithm.searching : startsWith;
+
+        mixin Check!("SDDecl");
+
+        try
+        {
+            checkSpace(s);
+            checkLiteral("standalone",s);
+            checkEq(s);
+        }
+        catch (Err e) { fail(e); }
+
+        int n = 0;
+             if (s.startsWith("'yes'") || s.startsWith("\"yes\"")) n = 5;
+        else if (s.startsWith("'no'" ) || s.startsWith("\"no\"" )) n = 4;
+        else fail("standalone attribute value must be 'yes', \"yes\","~
+            " 'no' or \"no\"");
+        s = s[n..$];
+    }
+
+    void checkElement(ref string s) @safe pure // rule 39
+    {
+        mixin Check!("Element");
+
+        string sname,ename,t;
+        try { checkTag(s,t,sname); } catch (Err e) { fail(e); }
+
+        if (t == "STag")
+        {
+            try
+            {
+                checkContent(s);
+                t = s;
+                checkETag(s,ename);
+            }
+            catch (Err e) { fail(e); }
+
+            if (sname != ename)
+            {
+                s = t;
+                fail("end tag name \"" ~ ename
+                    ~ "\" differs from start tag name \""~sname~"\"");
+            }
+        }
+    }
+
+    // rules 40 and 44
+    void checkTag(ref string s, out string type, out string name) @safe pure
+    {
+        mixin Check!("Tag");
+
+        try
+        {
+            type = "STag";
+            checkLiteral("<",s);
+            checkName(s,name);
+            star!(seq!(checkSpace,checkAttribute))(s);
+            opt!(checkSpace)(s);
+            if (s.length != 0 && s[0] == '/')
+            {
+                s = s[1..$];
+                type = "ETag";
+            }
+            checkLiteral(">",s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkAttribute(ref string s) @safe pure // rule 41
+    {
+        mixin Check!("Attribute");
+
+        try
+        {
+            string name;
+            checkName(s,name);
+            checkEq(s);
+            checkAttValue(s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkETag(ref string s, out string name) @safe pure // rule 42
+    {
+        mixin Check!("ETag");
+
+        try
+        {
+            checkLiteral("</",s);
+            checkName(s,name);
+            opt!(checkSpace)(s);
+            checkLiteral(">",s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkContent(ref string s) @safe pure // rule 43
+    {
+        import std.algorithm.searching : startsWith;
+
+        mixin Check!("Content");
+
+        try
+        {
+            while (s.length != 0)
+            {
+                old = s;
+                     if (s.startsWith("&"))        { checkReference(s); }
+                else if (s.startsWith("<!--"))     { checkComment(s); }
+                else if (s.startsWith("<?"))       { checkPI(s); }
+                else if (s.startsWith(cdata)) { checkCDSect(s); }
+                else if (s.startsWith("</"))       { break; }
+                else if (s.startsWith("<"))        { checkElement(s); }
+                else                               { checkCharData(s); }
+            }
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkCharRef(ref string s, out dchar c) @safe pure // rule 66
+    {
+        import std.format : format;
+
+        mixin Check!("CharRef");
+
+        c = 0;
+        try { checkLiteral("&#",s); } catch (Err e) { fail(e); }
+        int radix = 10;
+        if (s.length != 0 && s[0] == 'x')
+        {
+            s = s[1..$];
+            radix = 16;
+        }
+        if (s.length == 0) fail("unterminated character reference");
+        if (s[0] == ';')
+            fail("character reference must have at least one digit");
+        while (s.length != 0)
+        {
+            immutable char d = s[0];
+            int n = 0;
+            switch (d)
+            {
+                case 'F','f': ++n;      goto case;
+                case 'E','e': ++n;      goto case;
+                case 'D','d': ++n;      goto case;
+                case 'C','c': ++n;      goto case;
+                case 'B','b': ++n;      goto case;
+                case 'A','a': ++n;      goto case;
+                case '9':     ++n;      goto case;
+                case '8':     ++n;      goto case;
+                case '7':     ++n;      goto case;
+                case '6':     ++n;      goto case;
+                case '5':     ++n;      goto case;
+                case '4':     ++n;      goto case;
+                case '3':     ++n;      goto case;
+                case '2':     ++n;      goto case;
+                case '1':     ++n;      goto case;
+                case '0':     break;
+                default: n = 100; break;
+            }
+            if (n >= radix) break;
+            c *= radix;
+            c += n;
+            s = s[1..$];
+        }
+        if (!isChar(c)) fail(format("U+%04X is not a legal character",c));
+        if (s.length == 0 || s[0] != ';') fail("expected ;");
+        else s = s[1..$];
+    }
+
+    void checkReference(ref string s) @safe pure // rule 67
+    {
+        import std.algorithm.searching : startsWith;
+
+        mixin Check!("Reference");
+
+        try
+        {
+            dchar c;
+            if (s.startsWith("&#")) checkCharRef(s,c);
+            else checkEntityRef(s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkEntityRef(ref string s) @safe pure // rule 68
+    {
+        mixin Check!("EntityRef");
+
+        try
+        {
+            string name;
+            checkLiteral("&",s);
+            checkName(s,name);
+            checkLiteral(";",s);
+        }
+        catch (Err e) { fail(e); }
+    }
+
+    void checkEncName(ref string s) @safe pure // rule 81
+    {
+        import std.string : munch;
+
+        mixin Check!("EncName");
+
+        munch(s,"a-zA-Z");
+        if (s is old) fail();
+        munch(s,"a-zA-Z0-9_.-");
+    }
+
+    void checkEncodingDecl(ref string s) @safe pure // rule 80
+    {
+        mixin Check!("EncodingDecl");
+
+        try
+        {
+            checkSpace(s);
+            checkLiteral("encoding",s);
+            checkEq(s);
+            quoted!(checkEncName)(s);
+        }
+        catch (Err e) { fail(e); }
+    }
 
     // Helper functions
-bool foundLiteral(string literal, ref string s)
-{
-	if (s.startsWith(literal))
-	{
-		s = s[literal.length..$];
-		return true;
-	}
-	return false;
+
+    void checkLiteral(string literal,ref string s) @safe pure
+    {
+        import std.string : startsWith;
+
+        mixin Check!("Literal");
+
+        if (!s.startsWith(literal)) fail("Expected literal \""~literal~"\"");
+        s = s[literal.length..$];
+    }
+
+    void checkEnd(string end,ref string s) @safe pure
+    {
+        import std.string : indexOf;
+        // Deliberately no mixin Check here.
+
+        auto n = s.indexOf(end);
+        if (n == -1) throw new Err(s,"Unable to find terminating \""~end~"\"");
+        s = s[n..$];
+        checkLiteral(end,s);
+    }
+
+    // Metafunctions -- none of these use mixin Check
+
+    void opt(alias f)(ref string s)
+    {
+        try { f(s); } catch (Err e) {}
+    }
+
+    void plus(alias f)(ref string s)
+    {
+        f(s);
+        star!(f)(s);
+    }
+
+    void star(alias f)(ref string s)
+    {
+        while (s.length != 0)
+        {
+            try { f(s); }
+            catch (Err e) { return; }
+        }
+    }
+
+    void quoted(alias f)(ref string s)
+    {
+        import std.string : startsWith;
+
+        if (s.startsWith("'"))
+        {
+            checkLiteral("'",s);
+            f(s);
+            checkLiteral("'",s);
+        }
+        else
+        {
+            checkLiteral("\"",s);
+            f(s);
+            checkLiteral("\"",s);
+        }
+    }
+
+    void seq(alias f,alias g)(ref string s)
+    {
+        f(s);
+        g(s);
+    }
 }
-
-void checkLiteral(string literal,ref string s)
-{
-    if (!s.startsWith(literal))
-		failCheck(s,"Expected literal \""~literal~"\"");
-	s = s[literal.length..$];
-}
-
-void checkEnd(string end,ref string s)
-{
-    auto n = s.indexOf(end);
-    if (n == -1) throw new Err(s,"Unable to find terminating \""~end~"\"");
-    s = s[n..$];
-    checkLiteral(end,s);
-}
-
-
 
 /**
  * Check an entire XML document for well-formedness
@@ -2440,30 +2752,25 @@ void checkEnd(string end,ref string s)
  * parse failure (the XML equivalent of a stack trace), giving the line and
  * column number of every failure at every level.
  */
-void check(string s)
+void check(string s) pure
 {
-	XmlValidate v = new XmlValidate();
-	scope(exit)
-		destroy(v);
-	auto entire = s; // remember entire
     try
     {
-
-		v.fullCheck(s);
-
+        checkChars(s);
+        checkDocument(s);
         if (s.length != 0) throw new Err(s,"Junk found after document");
     }
-    catch(Err e)
+    catch (Err e)
     {
-        e.complete(entire);
+        e.complete(s);
         throw e;
     }
 }
 
-unittest
+@system pure unittest
 {
-  version (none) // WHY ARE WE NOT RUNNING THIS UNIT TEST?
-  {
+    import std.string : indexOf;
+
     try
     {
         check(q"[<?xml version="1.0"?>
@@ -2499,18 +2806,17 @@ unittest
            </book>
         </catalog>
         ]");
-    assert(false);
+        assert(false);
     }
-    catch(CheckException e)
+    catch (CheckException e)
     {
-        int n = e.toString().indexOf("end tag name \"genres\" differs"~
-            " from start tag name \"genre\"");
+        auto n = e.toString().indexOf("end tag name \"genres\" differs"~
+                                      " from start tag name \"genre\"");
         assert(n != -1);
     }
-  }
 }
 
-unittest
+@system unittest
 {
     string s = q"EOS
 <?xml version="1.0"?>
@@ -2530,7 +2836,27 @@ EOS";
     }
 }
 
-unittest
+@system unittest
+{
+    string test_xml = `<?xml version="1.0" encoding='UTF-8'?><r><stream:stream
+                        xmlns:stream="http://etherx.'jabber'.org/streams"
+                        xmlns="jabber:'client'" from='jid.pl' id="587a5767"
+                        xml:lang="en" version="1.0" attr='a"b"c'>
+                        </stream:stream></r>`;
+
+    DocumentParser parser = new DocumentParser(test_xml);
+    bool tested = false;
+    parser.onStartTag["stream:stream"] = (ElementParser p) {
+        assert(p.tag.attr["xmlns"] == "jabber:'client'");
+        assert(p.tag.attr["from"] == "jid.pl");
+        assert(p.tag.attr["attr"] == "a\"b\"c");
+        tested = true;
+    };
+    parser.parse();
+    assert(tested);
+}
+
+@system unittest
 {
     string s = q"EOS
 <?xml version="1.0" encoding="utf-8"?> <Tests>
@@ -2549,7 +2875,7 @@ EOS";
     xml.parse();
 }
 
-unittest
+@system unittest
 {
     string s = `<tag attr="&quot;value&gt;" />`;
     auto doc = new Document(s);
@@ -2557,41 +2883,41 @@ unittest
 }
 
 /** The base class for exceptions thrown by this module */
-class XMLException : Exception { this(string msg) { super(msg); } }
+class XMLException : Exception { this(string msg) @safe pure { super(msg); } }
 
 // Other exceptions
 
 /// Thrown during Comment constructor
 class CommentException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /// Thrown during CData constructor
 class CDataException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /// Thrown during XMLInstruction constructor
 class XIException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /// Thrown during ProcessingInstruction constructor
 class PIException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /// Thrown during Text constructor
 class TextException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /// Thrown during decode()
 class DecodeException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /// Thrown if comparing with wrong type
 class InvalidTypeException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /// Thrown when parsing for Tags
 class TagException : XMLException
-{ private this(string msg) { super(msg); } }
+{ private this(string msg) @safe pure { super(msg); } }
 
 /**
  * Thrown during check()
@@ -2608,7 +2934,7 @@ class CheckException : XMLException
     size_t line = 0; /// Line number at which parse failure occurred
     size_t column = 0; /// Column number at which parse failure occurred
 
-    private this(string tail,string msg,Err err=null)
+    private this(string tail,string msg,Err err=null) @safe pure
     {
         super(null);
         this.tail = tail;
@@ -2616,8 +2942,11 @@ class CheckException : XMLException
         this.err = err;
     }
 
-    private void complete(string entire)
+    private void complete(string entire) pure
     {
+        import std.encoding : transcode;
+        import std.string : count, lastIndexOf;
+
         string head = entire[0..$-tail.length];
         ptrdiff_t n = head.lastIndexOf('\n') + 1;
         line = head.count("\n") + 1;
@@ -2627,8 +2956,10 @@ class CheckException : XMLException
         if (err !is null) err.complete(entire);
     }
 
-    override string toString() const
+    override string toString() const @safe pure
     {
+        import std.format : format;
+
         string s;
         if (line != 0) s = format("Line %d, column %d: ",line,column);
         s ~= msg;
@@ -2655,7 +2986,7 @@ private
         return t;
     }
 
-    string chop(ref string s, size_t n)
+    string chop(ref string s, size_t n) @safe pure nothrow
     {
         if (n == -1) n = s.length;
         string t = s[0..n];
@@ -2663,17 +2994,28 @@ private
         return t;
     }
 
-    bool optc(ref string s, char c)
+    bool optc(ref string s, char c) @safe pure nothrow
     {
-        bool b = s.length != 0 && s[0] == c;
+        immutable bool b = s.length != 0 && s[0] == c;
         if (b) s = s[1..$];
         return b;
     }
 
-    void reqc(ref string s, char c)
+    void reqc(ref string s, char c) @safe pure
     {
         if (s.length == 0 || s[0] != c) throw new TagException("");
         s = s[1..$];
+    }
+
+    char requireOneOf(ref string s, string chars) @safe pure
+    {
+        import std.string : indexOf;
+
+        if (s.length == 0 || indexOf(chars,s[0]) == -1)
+            throw new TagException("");
+        immutable char ch = s[0];
+        s = s[1..$];
+        return ch;
     }
 
     size_t hash(string s,size_t h=0) @trusted nothrow
@@ -2754,7 +3096,7 @@ private
         0x0387,0x0640,0x0640,0x0E46,0x0E46,0x0EC6,0x0EC6,0x3005,0x3005,0x3031,
         0x3035,0x309D,0x309E,0x30FC,0x30FE];
 
-    bool lookup(const(int)[] table, int c)
+    bool lookup(const(int)[] table, int c) @safe @nogc nothrow pure
     {
         while (table.length != 0)
         {
@@ -2772,10 +3114,10 @@ private
         return false;
     }
 
-    string startOf(string s)
+    string startOf(string s) @safe nothrow pure
     {
         string r;
-        foreach(char c;s)
+        foreach (char c;s)
         {
             r ~= (c < 0x20 || c > 0x7F) ? '.' : c;
             if (r.length >= 40) { r ~= "___"; break; }
@@ -2789,602 +3131,3 @@ private
     }
 }
 
-/// The check code and mixins are pretty amazing, but the use of exceptions is a drag on performance
-/// attempt to provide same style but with good old stack and return codes.
-
-struct CheckState {
-	string		name;
-	string		ctx;
-
-	this(string lname, string save)
-	{
-		name = lname;
-		ctx = save;
-	}
-
-	bool same(ref string s) const
-	{
-		return ctx.ptr == s.ptr;
-	}
-}
-
-enum XmlValid {
-	VALID,
-	INVALID,
-	FAIL,
-}
-
-enum Requirement {
-	ZERO,
-	ONE,
-	MANY,
-	OPTION = 4,
-	NEED = 8,
-}
-
-
-
-
-
-class XmlValidate {
-	Appender!(CheckState[])			stack_;  // keep track of temporary slice alterations
-	Appender!(CheckException[])		errors_;
-	XmlValid	status;
-	Requirement	require;
-
-	CheckState getContext()
-	{
-		auto sdata = stack_.data;
-		auto slen = sdata.length;
-		if (slen > 0)
-		{
-			slen--;
-			return sdata[slen];
-		}
-		// TODO: else big fail?
-		assert(0);
-	}
-	CheckState pushContext(string lname, string s)
-	{
-		auto result = CheckState(lname,s);
-		stack_.put(result);
-		return result;
-	}
-	void popContext()
-	{
-		auto sdata = stack_.data;
-		auto slen = sdata.length;
-		if (slen > 0)
-		{
-			slen--;
-			stack_.shrinkTo(slen);
-			return;
-		}
-		// TODO: else big fail?
-		assert(0);
-	}
-
-	void failed(Err e)
-	{
-		auto level = getContext();
-		throw new Err(level.ctx,level.name,e);
-	}
-	void failed()
-	{
-		auto level = getContext();
-		throw  new Err(level.ctx,level.name, null);
-	}
-	void failed(string msg)
-	{
-		auto level = getContext();
-		throw new Err(level.ctx,msg, null);
-	}
-
-	void failSpace()
-	{
-		failed("A space character is needed");
-	}
-	void updateStatus(XmlValid v)
-	{
-		if (cast(int) v > cast(int) status)
-			status = v;
-	}
-	// failure throws FAIL
-	void checkLiteral(string literal,ref string s)
-    {
-        auto level = pushContext("Literal",s);
-		scope(exit)
-			popContext();
-        if (!s.startsWith(literal))
-			failed("Expected literal \""~literal~"\"");
-		s = s[literal.length..$];
-    }
-	uintptr_t spaceCount(ref string s)
-	{
-		auto start = s;
-		munch(s,"\u0020\u0009\u000A\u000D");
-		return (s.ptr - start.ptr);
-	}
-
-    bool checkSpace(ref string s, Requirement req) // rule 3
-    {
-        pushContext("Whitespace",s);
-		scope(exit)
-			popContext();
-		auto level = getContext();
-        munch(s,"\u0020\u0009\u000A\u000D");
-		auto ct = s.ptr - level.ctx.ptr;
-		if (ct < 1 && req != Requirement.OPTION)
-			failSpace();
-		return (ct > 0);
-    }
-	void pair(alias f,alias g)(ref string s)
-    {
-        if (f(s,Requirement.OPTION))
-		{
-			g(s,Requirement.NEED);
-		}
-    }
-	void quoted(alias f)(ref string s, Requirement req)
-    {
-		auto quoteChar = "\'";
-
-		if (foundLiteral(quoteChar,s))
-		{
-			f(s,req);
-		}
-		else {
-			quoteChar = "\"";
-			if (foundLiteral(quoteChar,s))
-			{
-				f(s,req);
-			}
-			else {
-				failed();
-			}
-		}
-		checkLiteral(quoteChar,s);
-    }
-
-	void need(alias f)(ref string s)
-	{
-		return f(s,Requirement.NEED);
-	}
-
-    void maybe(alias f)(ref string s)
-    {
-		f(s,Requirement.OPTION);
-    }
-    void many(alias f)(ref string s)
-    {
-		uintptr_t ct = 0;
-        do
-        {
-            ct = f(s,Requirement.MANY);
-        }
-		while (ct > 0);
-    }
-
-    void checkEq(ref string s) // rule 25
-    {
-        pushContext("Eq",s);
-        scope(exit)
-			popContext();
-		maybe!(checkSpace)(s);
-        checkLiteral("=",s);
-        maybe!(checkSpace)(s);
-    }
-
-    void checkEncodingDecl(ref string s, Requirement req) // rule 80
-    {
-        auto level = pushContext("EncodingDecl",s);
-		scope(exit)
-			popContext();
-
-        auto ct = spaceCount(s);
-        if (foundLiteral("encoding",s))
-		{
-			if (ct < 1)
-				failSpace();
-			checkEq(s);
-			quoted!(checkEncName)(s,req);
-		}
-		else {
-			s = level.ctx;
-		}
-    }
-
-    void checkEncName(ref string s, Requirement req) // rule 81
-    {
-        auto level = pushContext("EncName",s);
-
-        munch(s,"a-zA-Z");
-        if (level.same(s)) failed();
-        munch(s,"a-zA-Z0-9_.-");
-    }
-
-	void checkXMLDecl(ref string s, Requirement req)
-	{
-		auto level = pushContext("XMLDecl",s);
-		scope(exit)
-			popContext();
-		if (foundLiteral("<?xml",s))
-		{
-			// xml dec is not compulsory, once in , better be good
-			checkVersionInfo(s,Requirement.NEED);
-			maybe!(checkEncodingDecl)(s);
-			maybe!(checkSDDecl)(s);
-			maybe!(checkSpace)(s);
-			checkLiteral("?>",s);
-		}
-	}
-    void checkVersionNum(ref string s, Requirement req) // rule 26
-    {
-        auto level = pushContext("VersionNum",s);
-		scope(exit)
-			popContext();
-        munch(s,"a-zA-Z0-9_.:-"); // not very specific
-        if (level.same(s))
-			failed();
-    }
-	void checkYesNo(ref string s, Requirement req)
-	{
-		if (foundLiteral("yes",s)  || foundLiteral("no",s))
-		{
-			return;
-		}
-		else {
-			failed("yes or no attribute value required");
-		}
-	}
-
-    void checkSDDecl(ref string s, Requirement req) // rule 32
-    {
-        auto level = pushContext("SDDecl",s);
-		scope(exit)
-			popContext();
-
-		auto ct = spaceCount(s);
-        if (foundLiteral("standalone",s))
-		{
-			if (ct < 1)
-				failSpace();
-            checkEq(s);
-			quoted!(checkYesNo)(s,Requirement.NEED);
-		}
-		else
-			s = level.ctx;
-    }
-    void checkVersionInfo(ref string s, Requirement req) // rule 24
-    {
-        auto level = pushContext("VersionInfo",s);
-		scope(exit)
-			popContext();
-
-		auto ct = spaceCount(s);
-        if (foundLiteral("version",s))
-		{
-			if (ct < 1)
-				failSpace();
-			checkEq(s);
-			quoted!(this.checkVersionNum)(s,req);
-		}
-		else {
-			if (req == Requirement.NEED)
-			{
-				failed(level.name);
-			}
-			s = level.ctx;
-		}
-    }
-	void checkProlog(ref string s, Requirement req) // rule 22
-    {
-        auto level = pushContext("Prolog",s);
-		scope(exit)
-			popContext();
-        maybe!(checkXMLDecl)(s);
-        many!(checkMisc)(s);
-            //maybe!(seq!(checkDocTypeDecl,many!(checkMisc)))(s);
-    }
-
-	// should only throw exception if not well formed
-	void checkDocument(ref string s) // rule 1
-    {
-        auto level=pushContext("Document",s);
-		scope(exit)
-			popContext();
-		checkProlog(s,Requirement.OPTION);
-		checkElement(s);
-		many!(checkMisc)(s);
-    }
-    void checkComment(ref string s,Requirement req) // rule 15
-    {
-        auto level = pushContext("Comment",s);
-		scope(exit)
-			popContext();
-        if (foundLiteral("<!--",s))
-		{
-			ptrdiff_t n = s.indexOf("--");
-			if (n == -1)
-				failed("unterminated comment");
-			s = s[n..$];
-			checkLiteral("-->",s);
-		}
-    }
-    void checkEnd(string end,ref string s)
-    {
-        auto n = s.indexOf(end);
-        if (n == -1)
-			failed(format("Unable to find terminating \"%s\"", end));
-        s = s[n..$];
-        checkLiteral(end,s);
-    }
-    void checkPI(ref string s,Requirement req) // rule 16
-    {
-        auto level = pushContext("PI",s);
-		scope(exit)
-			popContext();
-        if (foundLiteral("<?",s))
-		{
-			checkEnd("?>",s);
-        }
-    }
-    uintptr_t checkMisc(ref string s, Requirement req) // rule 27
-    {
-        auto level = pushContext("Misc",s);
-		scope(exit)
-			popContext();
-		auto ct = spaceCount(s);
-		if (s.startsWith("<!--"))
-		{
-			need!(checkComment)(s);
-			ct++;
-		}
-		else if (s.startsWith("<?"))
-		{
-			need!(checkPI)(s);
-			ct++;
-		}
-		return ct;
-    }
-	void checkElement(ref string s) // rule 39
-    {
-        auto level = pushContext("Element",s);
-		scope(exit)
-			popContext();
-        string sname,ename,t;
-		checkTag(s,t,sname);
-
-        if (t == "STag")
-        {
-            checkContent(s);
-            t = s;
-            checkETag(s,ename);
-            if (sname != ename)
-            {
-                s = t;
-                failed(format("end tag name '%s' differs from start tag name '%s'", ename,sname));
-            }
-        }
-    }
-
-    bool checkName(ref string s, out string name) // rule 5
-    {
-        if (s.length == 0)
-			return false;
-        int n;
-        foreach(int i,dchar c;s)
-        {
-            if (c == '_' || c == ':' || isLetter(c)) continue;
-            if (i == 0)
-				return false; // not a beginning of name
-            if (c == '-' || c == '.' || isDigit(c)
-                || isCombiningChar(c) || isExtender(c)) continue;
-            n = i;
-            break;
-        }
-        name = s[0..n];
-        s = s[n..$];
-		return true;
-    }
-	// rules 40 and 44
-    void checkTag(ref string s, out string type, out string name)
-    {
-        auto level = pushContext("Tag",s);
-		scope(exit)
-			popContext();
-        type = "STag";
-        checkLiteral("<",s);
-        checkName(s,name);
-
-        many!(checkAttribute)(s);
-        maybe!(checkSpace)(s);
-        if (s.length != 0 && s[0] == '/')
-        {
-            s = s[1..$];
-            type = "ETag";
-        }
-        checkLiteral(">",s);
-    }
-	void checkReference(ref string s) // rule 67
-    {
-        auto level = pushContext("Reference",s);
-		scope(exit)
-			popContext();
-		dchar c;
-		if (s.startsWith("&#"))
-			checkCharRef(s,c);
-		else
-			checkEntityRef(s);
-    }
-	uintptr_t checkAttribute(ref string s, Requirement req) // rule 41
-    {
-        auto level = pushContext("Attribute",s);
-		scope(exit)
-			popContext();
-        string name;
-		auto ct = spaceCount(s);
-		if (checkName(s,name))
-		{
-			if (ct < 1)
-				failSpace();
-			checkEq(s);
-			checkAttValue(s);
-		}
-		return ct;
-	}
-    void checkEntityRef(ref string s) // rule 68
-    {
-		auto level = pushContext("EntityRef",s);
-		scope(exit)
-			popContext();
-        string name;
-        checkLiteral("&",s);
-        checkName(s, name);
-        checkLiteral(";",s);
-    }
-
-
-    void checkETag(ref string s, out string name) // rule 42
-    {
-        auto level = pushContext("ETag",s);
-		scope(exit)
-			popContext();
-        checkLiteral("</",s);
-        checkName(s,name);
-        spaceCount(s);
-        checkLiteral(">",s);
-    }
-	void checkContent(ref string s) // rule 43
-    {
-		auto level = pushContext("Content",s);
-		scope(exit)
-			popContext();
-        while (s.length != 0)
-        {
-			if (s.startsWith("&"))
-			{
-				checkReference(s);
-			}
-            else if (s.startsWith("<!--"))
-			{
-				checkComment(s,Requirement.NEED);
-			}
-            else if (s.startsWith("<?"))
-			{
-				checkPI(s,Requirement.NEED);
-			}
-            else if (s.startsWith(cdata))
-			{
-				checkCDSect(s);
-			}
-            else if (s.startsWith("</"))
-			{
-				break;
-			}
-            else if (s.startsWith("<"))
-			{
-				checkElement(s);
-			}
-            else
-			{
-				checkCharData(s);
-			}
-        }
-    }
-    void checkCDSect(ref string s) // rule 18
-    {
-        auto level = pushContext("CDSect",s);
-		scope(exit)
-			popContext();
-
-        checkLiteral(cdata,s);
-        checkEnd("]]>",s);
-    }
-    void checkAttValue(ref string s) // rule 10
-    {
-        auto level = pushContext("AttValue",s);
-		scope(exit)
-			popContext();
-        if (s.length == 0)
-			failed();
-        char c = s[0];
-        if (c != '\u0022' && c != '\u0027')
-            failed("attribute value requires quotes");
-        s = s[1..$];
-        for(;;)
-        {
-            munch(s,"^<&"~c);
-            if (s.length == 0) failed("unterminated attribute value");
-            if (s[0] == '<') failed("< found in attribute value");
-            if (s[0] == c) break;
-            checkReference(s);
-        }
-        s = s[1..$];
-    }
-    void checkChars(ref string s) // rule 2
-    {
-        // TO DO - Fix std.utf stride and decode functions, then use those
-        // instead
-
-        auto level = pushContext("Chars",s);
-		scope(exit)
-			popContext();
-
-        dchar c;
-        int n = -1;
-        foreach(int i,dchar d; s)
-        {
-            if (!isChar(d))
-            {
-                c = d;
-                n = i;
-                break;
-            }
-        }
-        if (n != -1)
-        {
-            s = s[n..$];
-            failed(format("invalid character: U+%04X",c));
-        }
-    }
-    void checkCharData(ref string s) // rule 14
-    {
-		auto level = pushContext("CharData",s);
-		scope(exit)
-			popContext();
-
-        while (true)
-        {
-			spaceCount(s);
-			if (s.length == 0)
-				break;
-            if (s.startsWith("&"))
-				break;
-            if (s.startsWith("<"))
-				break;
-            if (s.startsWith("]]>"))
-				failed("]]> found within char data");
-            s = s[1..$];
-        }
-    }
-
-    void checkDocTypeDecl(ref string s) // rule 28
-    {
-        auto level = pushContext("DocTypeDecl",s);
-		scope(exit)
-			popContext();
-        checkLiteral("<!DOCTYPE",s);
-        //
-        // TO DO -- ensure DOCTYPE is well formed
-        // (But not yet. That's one of our "future directions")
-        //
-        checkEnd(">",s); // this is really not going to work for most DOCTYPE
-    }
-
-	void fullCheck(ref string s)
-	{
-        checkChars(s);
-        checkDocument(s);
-	}
-}

@@ -15,7 +15,7 @@
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />
-					<Add option="-I../../../" />
+					<Add option="-I../../../ -version=GC_STATS" />
 				</Compiler>
 			</Target>
 			<Target title="Release">
@@ -25,14 +25,14 @@
 				<Option compiler="dmd" />
 				<Compiler>
 					<Add option="-O" />
-					<Add option="-I../../../" />
+					<Add option="-I../../../ -version=BUF_NATIVE" />
 				</Compiler>
 			</Target>
 		</Build>
+		<Unit filename="../../../examples/speed2/source/speed2.d" />
 		<Unit filename="../../../xml/dom/domt.d" />
 		<Unit filename="../../../xml/dom/dtdt.d" />
 		<Unit filename="../../../xml/std/xmlSlicer.d" />
-		<Unit filename="../../../xml/test/speed2.d" />
 		<Unit filename="../../../xml/textInput.d" />
 		<Unit filename="../../../xml/txml.d" />
 		<Unit filename="../../../xml/util/bomstring.d" />

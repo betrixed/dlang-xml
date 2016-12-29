@@ -668,13 +668,12 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 	}
 	void setSource(S)(const(S)[] src)
 	{
-		parser_.fillSource(new SliceFill!S(src));
+		parser_.fillSource(new SliceBuffer!S(src));
 	}
 
 	void setFile(string filename)
 	{
-        auto s = new FileReader(filename);
-		parser_.fillSource = new XmlFileReader(s);
+		parser_.fillSource = new XmlFileReader(File(filename,"r"));
 	}
     //
 	void setFileSlice(string filename)

@@ -31,6 +31,7 @@
 		<Unit filename="../../../examples/extract/src/extract.d" />
 		<Unit filename="../../../xml/dom/domt.d" />
 		<Unit filename="../../../xml/dom/dtdt.d" />
+		<Unit filename="../../../xml/sax.d" />
 		<Unit filename="../../../xml/std/xmlSlicer.d" />
 		<Unit filename="../../../xml/textInput.d" />
 		<Unit filename="../../../xml/txml.d" />

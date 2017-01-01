@@ -45,6 +45,7 @@ class XmlParser(T)  {
 		bool				namespaceAware_;
 		bool				normalizeAttributes_;
 		bool				inDTD_;
+		bool                isHTML_; // relax some rules for HTML
 		bool				isEntity;
 		bool				hasDeclaration;
 		bool				hasXmlVersion;
@@ -859,11 +860,14 @@ class XmlParser(T)  {
 			dchar enquote = (empty ? 0x00 : front);
 			bool  deviant = false;
 
-			if ((enquote != '\'') && (enquote != '\"'))
+			if ((enquote == '\'') || (enquote == '\"'))
 			{
-				throw errors_.makeException(XmlErrorCode.MISSING_QUOTE);
+				popFront();
 			}
-			popFront();
+			else if (!isHTML_)
+				throw errors_.makeException(XmlErrorCode.MISSING_QUOTE);
+
+
 			if (slicing_)
 			{
 				marker_.start(sliceData_.ptr, mpos);
@@ -872,7 +876,7 @@ class XmlParser(T)  {
 			//bufAttr_.length = 0;
 			//bufAttr_.shrinkTo(0);
 			xmlt!T.reset(bufAttr_);
-			frontFilterOn();
+			frontFilterOn(); // ackward character rules?
 			while(!empty)
 			{
 				if (front == enquote)
@@ -898,7 +902,23 @@ class XmlParser(T)  {
 				{
 					if (lastChar_)
 						deviant = true;
-					bufAttr_ ~= front;
+
+					if (isHTML_ && (enquote==0x00))
+					{
+						// HTML is slack, and I don't know the spec
+						if ((front != '/') && (front != '>') &&
+							!isSpace(front))
+						{
+							bufAttr_ ~= front;
+						}
+						else {
+							frontFilterOff();
+							return;  // NO pop
+						}
+					}
+					else {
+						bufAttr_ ~= front;
+					}
 					popFront();
 				}
 			}
@@ -1194,18 +1214,25 @@ class XmlParser(T)  {
 		final void checkEndElement()
 		{
 			int depth =  elementDepth + stackElementDepth;
-			if (depth < 0)
-				throw errors_.makeException(XmlErrorCode.ELEMENT_NESTING);
-			else if (depth == 0)
+			if (isHTML_)
 			{
-				stateDg_ = &doEpilog;
-				state_ = PState.P_EPILOG;
+				// anything goes
+
 			}
 			else {
-				state_ = PState.P_CONTENT;
+				if (depth < 0)
+					throw errors_.makeException(XmlErrorCode.ELEMENT_NESTING);
+				else if (depth == 0)
+				{
+					stateDg_ = &doEpilog;
+					state_ = PState.P_EPILOG;
+				}
+				else {
+					state_ = PState.P_CONTENT;
+				}
+				if (elementDepth < 0)
+					throw errors_.makeException(XmlErrorCode.ELEMENT_NESTING);
 			}
-			if (elementDepth < 0)
-				throw errors_.makeException(XmlErrorCode.ELEMENT_NESTING);
 		}
 		void doXmlDeclaration()
 		{
@@ -1570,7 +1597,7 @@ class XmlParser(T)  {
 
 					default:
 						// processs another attribute
-						if (attSpaceCt == 0)
+						if (attSpaceCt == 0 && !isHTML_)
 						{
 							throw errors_.makeException(XmlErrorCode.MISSING_SPACE);
 						}
@@ -2489,6 +2516,15 @@ class XmlParser(T)  {
 		charEntity[entityName] = value;
 	}
 
+	bool isHtml() @property
+	{
+		return isHTML_;
+	}
+
+	void isHtml(bool val) @property
+	{
+		isHTML_ = val;
+	}
     bool validate() const @property
     {
         return validate_;

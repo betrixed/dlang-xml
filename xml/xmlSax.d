@@ -290,6 +290,11 @@ public:
 		version(GC_STATS)
 			gcStatsSum.inc();
 	}
+
+	void isHtml(bool val)
+	{
+		parser_.isHtml(val);
+	}
 	void setupNormalize(immutable(T)[] xml)
 	{
 		parser_.setParameter(xmlAttributeNormalize,Variant(true));

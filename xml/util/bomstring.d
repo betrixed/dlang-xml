@@ -345,7 +345,7 @@ readFileBom(T)(string filename, ref int bomMark)
 	{
 	    scope(exit)
             f.close();
-        auto bufSize = f.size();
+        uint bufSize = cast(uint) f.size();
         if (bufSize ==  0)
            return null;
         raw = new ubyte[bufSize];

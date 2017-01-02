@@ -855,17 +855,42 @@ class XmlParser(T)  {
 			munchSpace();
 			unquoteValue(val);
 		}
+
+
 		final void unquoteValue(ref XmlString val)
 		{
-			dchar enquote = (empty ? 0x00 : front);
 			bool  deviant = false;
+			dchar enquote = (empty ? 0x00 : front);
+
+
+			void return_val()
+			{
+				if (xmlt!T.length(bufAttr_) > 0)
+				{
+					if (slicing_ && !deviant)
+					{
+						marker_.end(sliceData_.ptr, mpos);
+						val = marker_[];
+					}
+					else {
+						val = xmlt!T.data(bufAttr_).idup;
+					}
+				}
+				else
+					val = [];
+			}
+
 
 			if ((enquote == '\'') || (enquote == '\"'))
 			{
 				popFront();
 			}
-			else if (!isHTML_)
+			else if (!isHTML_) {
 				throw errors_.makeException(XmlErrorCode.MISSING_QUOTE);
+			}
+			else {
+				enquote = 0x00; // avoid another kind of quote character
+			}
 
 
 			if (slicing_)
@@ -881,19 +906,7 @@ class XmlParser(T)  {
 			{
 				if (front == enquote)
 				{
-					if (xmlt!T.length(bufAttr_) > 0)
-					{
-						if (slicing_ && !deviant)
-						{
-							marker_.end(sliceData_.ptr, mpos);
-							val = marker_[];
-						}
-						else {
-							val = xmlt!T.data(bufAttr_).idup;
-						}
-					}
-					else
-						val = [];
+					return_val();
 					frontFilterOff();
 					popFront();
 					return;
@@ -912,6 +925,7 @@ class XmlParser(T)  {
 							bufAttr_ ~= front;
 						}
 						else {
+							return_val();
 							frontFilterOff();
 							return;  // NO pop
 						}

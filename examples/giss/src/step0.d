@@ -1,5 +1,6 @@
 module step0;
 import std.stdio, std.file;
+import std.algorithm;
 
 import xml.txml;
 import xml.util.bomstring;
@@ -14,7 +15,7 @@ void main(string[] argv)
 	if (!exists(inputFile))
     {
         writeln("File not found : ", inputFile, "from ", getcwd());
-        getchar();
+        //getchar();
         return;
     }
 	auto visitor = new SaxParser();
@@ -23,23 +24,24 @@ void main(string[] argv)
 	string htmldata = readFileBom!char(inputFile, bomMark);
 
 	TagSpace mainNamespace = new TagSpace();
+	auto myTLink = boyerMooreFinder("All.temperature");
 
-    SaxDg textDg = (const SaxEvent xml)
-    {
-        writeln(xml.eventId, ": ", xml.data);
-    };
-
-	mainNamespace["a", SAX.TEXT] = (const SaxEvent xml) {
-		writeln(xml.data);
+	auto myLinkDg = (const SaxEvent xml) {
+		auto href = xml.attributes.get("href","");
+		if (href.length > 0)
+		{
+			auto r = find(href,myTLink);
+			if (r.length > 0)
+				writeln("link: ", href);
+		}
 	};
+
+	mainNamespace["a", SAX.TAG_START] = myLinkDg;
+
+		
+
 	visitor.namespace = mainNamespace;
 	auto handler = visitor.defaults;  // SaxParser looks after this
-	handler[SAX.TAG_START] = textDg;
-    handler[SAX.TEXT] = textDg;
-    handler[SAX.CDATA] = textDg;
-    handler[SAX.XML_PI] = textDg;
-    handler[SAX.COMMENT] = textDg;
-    handler[SAX.XML_DEC] = textDg;
 
 	try {
         visitor.setupNormalize(htmldata);
@@ -53,5 +55,6 @@ void main(string[] argv)
 	{
 		writeln(ex.msg);
 	}
+	//getchar();
 
 }

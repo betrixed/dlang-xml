@@ -1,0 +1,37 @@
+{
+	"name": "step0",
+	"targetName" : "step0",
+	"targetType" : "executable",
+	"mainSourceFile" : "src/step0.d",
+	"authors": [
+		"Michael Rynn"
+	],
+	"importPaths" : ["../../", "src/"],
+	"description": "compare with std.xml",
+	"copyright": "Copyright © 2016, Michael Rynn",
+	"license": "Artistic-2.0",
+	"buildOptions" : ["releaseMode"],
+	
+	"sourceFiles" : [
+		"../../xml/dom/domt.d",
+		"../../xml/dom/dtdt.d",
+		"../../xml/textInput.d",
+		"../../xml/txml.d",
+		"../../xml/util/bomstring.d",
+		"../../xml/util/buffer.d",
+		"../../xml/util/gcstats.d",
+		"../../xml/util/inputEncode.d",
+		"../../xml/util/read.d",
+		"../../xml/sax.d",
+		"../../xml/xmlArrayDom.d",
+		"../../xml/xmlAttribute.d",
+		"../../xml/xmlChar.d",
+		"../../xml/xmlError.d",
+		"../../xml/xmlLinkDom.d",
+		"../../xml/std/xmlSlicer.d",
+		"../../xml/xmlOutput.d",
+		"../../xml/xmlParser.d",
+		"../../xml/xmlSax.d"
+	]
+	
+}

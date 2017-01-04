@@ -5,6 +5,6 @@
 		<Project filename="bigload/bigload.cbp" />
 		<Project filename="conformance/conformance.cbp" />
 		<Project filename="extract/extract.cbp" />
-		<Project filename="step0/step0.cbp" />
+		<Project filename="../../examples/giss/clean2/clean2.cbp" />
 	</Workspace>
 </CodeBlocks_workspace_file>

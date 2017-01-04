@@ -1,0 +1,27 @@
+{
+	"name": "byrd",
+	"targetName" : "byrd",
+	"targetType" : "executable",
+	"mainSourceFile" : "src/reformat.d",
+	"authors": [
+		"Michael Rynn"
+	],
+	"importPaths" : ["../../../", "src/"],
+	"description": "compare with std.xml",
+	"copyright": "Copyright © 2016, Michael Rynn",
+	"license": "Artistic-2.0",
+	"buildOptions" : ["releaseMode"],
+	
+	"sourceFiles" : [
+		"../../../xml/textInput.d",
+		"../../../xml/xmlError.d",
+		"../../../xml/xmlAttribute.d",
+		"../../../xml/txml.d",
+		"../../../xml/util/bomstring.d",
+		"../../../xml/util/buffer.d",
+		"../../../xml/util/gcstats.d",
+		"../../../xml/util/inputEncode.d",
+		"../../../xml/util/read.d",
+	]
+	
+}

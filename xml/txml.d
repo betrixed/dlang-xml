@@ -427,35 +427,69 @@ Read only character array range, output dchar.
 */
 struct  ReadRange(T)
 {
-	bool empty;
-	dchar front;
+private:
 	const(T)[]	data_;
+	uintptr_t   next_;
+    dchar       front_;
 
-	this(const(T)[] s)
-	{
-		data_ = s;
-		empty = s.length == 0;
-		popFront();
-	}
-
-	void popFront()
+    void readyFront()
 	{
 		if (data_.length > 0)
 		{
 			static if (is(T == dchar))
 			{
-				front = data_[0];
-				data_ = data_[1..$];
+				front_ = data_[0];
+				next_ = 1;
 			}
 			else {
-				uintptr_t ix = 0;
-				front = decode(data_, ix);
-				data_ = data_[ix..$];
+                next_ = 0;
+                auto dataref = data_;
+				front_ = decode(dataref, next_);
 			}
 		}
-		else
-			empty = true;
 	}
+
+public:
+	this(const(T)[] s)
+	{
+		assign(s);
+	}
+	void assign(const(T)[] s)
+	{
+        data_ = s;
+        readyFront();
+	}
+
+
+	void popFront()
+	{
+		if (data_.length > next_)
+		{
+            data_ = data[next_..$];
+			readyFront();
+		}
+		else {
+            front_ = 0x00;
+            data_ = [];
+		}
+
+	}
+
+	bool empty() @property
+	{
+        return (data_.length == 0);
+	}
+
+	dchar front() @property
+	{
+        return front_;
+	}
+    const(T)[] data() @property
+    {
+        return data_;
+    }
+
+
 }
 
 
@@ -477,7 +511,7 @@ process a string, likely to be an integer or a real, or error / empty.
 */
 
 NumberClass
-parseNumber(R,W)(R rd, auto ref W wr,  int recurse = 0 )
+parseNumber(R,W)(ref R rd, auto ref W wr,  int recurse = 0 )
 {
     int   digitct = 0;
     bool  done = rd.empty;
@@ -511,12 +545,17 @@ parseNumber(R,W)(R rd, auto ref W wr,  int recurse = 0 )
 						// Ambiguous end of number, or exponent?
 						if (recurse == 0)
 						{
-							wr ~= (cast(char)test);
-							rd.popFront();
-							if (parseNumber(rd,wr, recurse+1)==NumberClass.NUM_INTEGER)
-								return NumberClass.NUM_REAL;
-							else
-								return NumberClass.NUM_ERROR;
+
+							auto tempRd = rd;
+							tempRd.popFront(); // pop the test character
+							char[] tempWr;
+							if (parseNumber(tempRd,tempWr, recurse+1)==NumberClass.NUM_INTEGER)
+							{
+                                rd = tempRd;
+                                wr ~= (cast(char)test);
+                                wr ~= tempWr;
+								return NumberClass.NUM_REAL; // TODO: if no decimal point, and exponent is +ve, then could also be integer
+                            }
 						}
 						// assume end of number
 					}

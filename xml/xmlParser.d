@@ -848,9 +848,23 @@ class XmlParser(T)  {
 		final void getAttributeValue(ref immutable(T)[] val)
 		{
 			munchSpace();
-			dchar test;
-			if (empty || (front != '='))
-				throw errors_.makeException(XmlErrorCode.EXPECTED_ATTRIBUTE);
+			if (isHTML_)
+			{
+				if (front != '=')
+				{
+					/* HTML : assume that value is name.
+					   Hard to tell caller */
+					val = [];
+					return;
+				}
+
+			}
+			else {
+				if (empty || (front != '='))
+				{
+					throw errors_.makeException(XmlErrorCode.EXPECTED_ATTRIBUTE);
+				}
+			}
 			popFront();
 			munchSpace();
 			unquoteValue(val);
@@ -919,8 +933,23 @@ class XmlParser(T)  {
 					if (isHTML_ && (enquote==0x00))
 					{
 						// HTML is slack, and I don't know the spec
-						if ((front != '/') && (front != '>') &&
-							!isSpace(front))
+						bool valid = true;
+						if (front == '/')
+						{
+							popFront();
+							if (front == '>')
+							{
+								valid = false;
+							}
+							pushBack('/'); // make '/' front again
+						}
+						else if (front == '>'){
+							valid = false;
+						}
+						else {
+							valid = !isSpace(front);
+						}
+						if (valid)
 						{
 							bufAttr_ ~= front;
 						}
@@ -1154,16 +1183,17 @@ class XmlParser(T)  {
 
 		double doXmlVersion(const(T)[] xmlversion)
 		{
-			T[]  scratch;
+			Buffer!T scratch;
 
-			NumberClass nc = parseNumber(ReadRange!T(xmlversion), scratch);
+            ReadRange!T number = xmlversion;
+			NumberClass nc = parseNumber(number, scratch);
 
 			//auto vstr = scratch_.toArray;
 			if (nc != NumberClass.NUM_REAL)
 				throw errors_.makeException(format("xml version %s weird ",xmlversion));
 			if (scratch.length < xmlversion.length)
 				throw errors_.makeException("additional text in xml version");
-			return  to!double(scratch);
+			return  to!double(scratch.data);
 		}
 		// After getting '<!--' leave in bufContent_
 		final void parseComment()
@@ -1626,8 +1656,12 @@ class XmlParser(T)  {
 
 						getAttributeValue(attrValue_);
 
-
-						if (normalizeAttributes_)
+						if (attrValue_.length == 0)
+						{
+							if (isHTML_)
+								attrValue_ = attrName_;
+						}
+						else if (normalizeAttributes_)
 						{
 							attributeNormalize(attrValue_);
 

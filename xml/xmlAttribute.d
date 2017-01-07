@@ -6,7 +6,7 @@ import std.array;
 import std.typecons, std.traits;
 import std.stdint;
 import std.algorithm;
-import xml.util.buffer;
+import texi.buffer;
 /// return index into original range
 alias Tuple!(bool,"found",intptr_t,"index") SearchResult;
 
@@ -16,11 +16,11 @@ template XMLAttribute(T)
 	alias immutable(T)[] XmlString;
 	/// always a pair
 	struct XmlAttribute {
-	
+
 		XmlString name;
 		XmlString value;
 
-		bool opEquals()(auto ref const XmlAttribute s) const { 
+		bool opEquals()(auto ref const XmlAttribute s) const {
 			return (this.name == s.name);
 		}
 		int opCmp(ref const XmlString id) const {
@@ -52,7 +52,7 @@ template XMLAttribute(T)
 		AttributeBuffer	attr_;
 
 		bool needSort_;
-		
+
 		this(const XmlAttribute[] src, bool needSort = false)
 		{
 			attr_ ~= src;
@@ -76,7 +76,7 @@ template XMLAttribute(T)
 			attr_ = [attrb];
 			needSort_ = false;
 		}
-	
+
 		SearchResult find(XmlString id) const
 		{
 			intptr_t e = attr_.length;
@@ -104,17 +104,17 @@ template XMLAttribute(T)
 			while (s < e) {
 				i =  (e + s) / 2;
 				auto cmp = attr_[i].opCmp(id);
-				if (cmp > 0) 
+				if (cmp > 0)
 					e = i;
-				else if (cmp < 0) 
+				else if (cmp < 0)
 					s = i+1;
-				else 
+				else
 					return SearchResult(true,i);
 			}
 			return SearchResult(false,i);
 		}
 
-		const(XmlAttribute)[] peek() const 
+		const(XmlAttribute)[] peek() const
 		{
 			static if (isDynamicArray!(AttributeBuffer))
 			{
@@ -141,7 +141,7 @@ template XMLAttribute(T)
 		@property uintptr_t length() const { return attr_.length; }
 		@property bool sorted() const { return !needSort_; }
 
-		void sort() 
+		void sort()
 		{
 			if (attr_.length > 1)
 			{
@@ -178,7 +178,7 @@ template XMLAttribute(T)
 			{   // replace the element with nothing
 				attr_[ix.index] = XmlAttribute.init;
 				pack(ix.index);
-				
+
 			}
 		}
 		void push(XmlString n, XmlString v)
@@ -222,13 +222,13 @@ template XMLAttribute(T)
 			auto attrb = XmlAttribute(name,value);
 			insert(attrb);
 		}
-		
+
 		XmlString get( XmlString key, XmlString elseValue = []) const
 		{
 			auto ix = find(key);
 			return (ix.found ? attr_[ix.index].value : elseValue);
 		}
-		XmlString* opIn_r(XmlString key) 
+		XmlString* opIn_r(XmlString key)
 		{
 			auto ix = find(key);
 			return (ix.found ? &attr_[ix.index].value : null);

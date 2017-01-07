@@ -1,0 +1,21 @@
+{
+	"name": "dump_old",
+	"targetName" : "strip_old",
+	"targetType" : "executable",
+	"mainSourceFile" : "src/dump_old.d",
+	"authors": [
+		"Michael Rynn"
+	],
+	"importPaths" : ["../../", "src/"],
+	"description": "strip years < minYear from giss v2 format",
+	"copyright": "Copyright © 2016, Michael Rynn",
+	"license": "Artistic-2.0",
+	
+	"sourceFiles" : [
+		"../../../texi/buffer.d",
+		"../../../texi/read.d",
+		"../../../texi/bomstring.d",
+		"../../../texi/inputEncode.d",
+	]
+	
+}

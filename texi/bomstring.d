@@ -1,4 +1,4 @@
-module xml.util.bomstring;
+module texi.bomstring;
 
 import std.variant;
 import std.file;
@@ -8,8 +8,8 @@ import std.stdint;
 import std.stdio;
 import std.string;
 import std.array;
-import xml.util.buffer;
-import xml.util.inputEncode;
+import texi.buffer;
+import texi.inputEncode;
 
 /** BOM mark datatype detection, read and write files.
     Jesse Phillips idea.

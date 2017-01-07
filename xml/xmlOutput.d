@@ -20,7 +20,7 @@ import std.exception;
 import std.conv;
 import std.string;
 import std.stdint;
-import xml.util.buffer;
+import texi.buffer;
 import tempxml = xml.txml;
 
 template XMLOutput(T)

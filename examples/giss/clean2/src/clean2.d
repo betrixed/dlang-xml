@@ -1,4 +1,11 @@
 module step0;
+
+/**
+	This downloads the antarctic2 sources, and reformats them 
+	into a standard format.
+	Line 1 , name and location
+	* [ Year Month(8.1)x12 ]   blanks are '-'
+*/
 import std.stdio, std.file;
 import std.path;
 import std.algorithm;

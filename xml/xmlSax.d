@@ -10,12 +10,13 @@ SAX xml event Template delegates to get call backs on Xml Parse events
 ---
 */
 
-import xml.util.buffer;
+
 import xml.util.gcstats;
 import xml.txml;
 import xml.xmlParser;
 import xml.textInput;
-import xml.util.inputEncode;
+import texi.inputEncode;
+import texi.buffer;
 
 import std.variant, std.stdint;
 

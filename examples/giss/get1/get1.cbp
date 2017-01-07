@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="get1" />
+		<Option pch_mode="2" />
+		<Option compiler="dmd" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/get1" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../get1" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="dmd" />
+				<Option parameters="--num 4" />
+				<Compiler>
+					<Add option="-w" />
+					<Add option="-g" />
+					<Add option="-I../../../" />
+				</Compiler>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/get1" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="dmd" />
+				<Compiler>
+					<Add option="-O2" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
+		</Build>
+		<Unit filename="../../../texi/bomstring.d" />
+		<Unit filename="../../../texi/buffer.d" />
+		<Unit filename="../../../texi/inputEncode.d" />
+		<Unit filename="../../../texi/read.d" />
+		<Unit filename="../../../xml/dom/domt.d" />
+		<Unit filename="../../../xml/dom/dtdt.d" />
+		<Unit filename="../../../xml/sax.d" />
+		<Unit filename="../../../xml/textInput.d" />
+		<Unit filename="../../../xml/txml.d" />
+		<Unit filename="../../../xml/util/gcstats.d" />
+		<Unit filename="../../../xml/util/read.d" />
+		<Unit filename="../../../xml/xmlAttribute.d" />
+		<Unit filename="../../../xml/xmlChar.d" />
+		<Unit filename="../../../xml/xmlError.d" />
+		<Unit filename="../../../xml/xmlLinkDom.d" />
+		<Unit filename="../../../xml/xmlOutput.d" />
+		<Unit filename="../../../xml/xmlParser.d" />
+		<Unit filename="../../../xml/xmlSax.d" />
+		<Unit filename="src/step0.d" />
+		<Extensions>
+			<code_completion />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

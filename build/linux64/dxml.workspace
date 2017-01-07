@@ -6,5 +6,8 @@
 		<Project filename="conformance/conformance.cbp" />
 		<Project filename="extract/extract.cbp" />
 		<Project filename="../../examples/giss/clean2/clean2.cbp" />
+		<Project filename="../../examples/giss/get1/get1.cbp" />
+		<Project filename="../../examples/giss/merge/merge.cbp" />
+		<Project filename="../../examples/giss/hpberg/hpberg.cbp" />
 	</Workspace>
 </CodeBlocks_workspace_file>

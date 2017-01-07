@@ -1,0 +1,21 @@
+{
+	"name": "hpberg",
+	"targetName" : "hpberg",
+	"targetType" : "executable",
+	"mainSourceFile" : "src/hpberg.d",
+	"authors": [
+		"Michael Rynn"
+	],
+	"importPaths" : ["../../", "src/"],
+	"description": "convert tabbed data file into giss v2 format",
+	"copyright": "Copyright © 2016, Michael Rynn",
+	"license": "Artistic-2.0",
+	
+	"sourceFiles" : [
+		"../../../texi/buffer.d",
+		"../../../texi/read.d",
+		"../../../texi/bomstring.d",
+		"../../../texi/inputEncode.d",
+	]
+	
+}

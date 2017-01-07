@@ -19,7 +19,7 @@ module xml.dom.domt;
 import std.stdint;
 import std.conv;
 import std.array;
-import xml.util.buffer;
+import texi.buffer;
 
 import std.string;
 import core.memory;

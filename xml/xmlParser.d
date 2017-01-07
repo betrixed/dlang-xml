@@ -8,10 +8,11 @@ import xml.xmlAttribute, xml.xmlError, xml.textInput, xml.util.read;
 import xml.dom.dtdt;
 import std.path, std.file, std.range;
 import std.format;
+import texi.read;
 import xml.util.gcstats;
-import xml.util.buffer;
-import xml.util.bomstring;
-import xml.util.inputEncode;
+import texi.buffer;
+import texi.bomstring;
+import texi.inputEncode;
 
 version = ParseDocType;
 

@@ -67,9 +67,9 @@ void main(string[] argv)
 	// convert byrd.txt into 
 	// Byrd.All.temperature.txt
 
-	// read the entire source file
-	string inputFile = "byrd.txt";
-	string outputFile = "Byrd.All.Temperature.txt";
+	// read reconstructed byrd as inputFile1, reformat, output as byrd_recon.txt
+	string inputFile1 = "byrd.txt";
+	string outputFile = "byrd_recon.txt";
 
 	if (!exists(inputFile))
     {

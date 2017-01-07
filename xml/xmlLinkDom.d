@@ -26,7 +26,7 @@ version(TagNesting)
 	import xml.dom.tagnest;
 }
 
-import xml.util.bomstring;
+import texi.bomstring;
 
 
 

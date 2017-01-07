@@ -17,7 +17,7 @@ import std.stdint;
 import std.traits;
 import core.exception;
 import xml.txml;
-import xml.util.inputEncode;
+import texi.inputEncode;
 //import xml.parseitem;
 import std.stdint;
 import std.utf;
@@ -27,7 +27,7 @@ import std.conv;
 import std.array;
 import std.range;
 import std.concurrency, std.socket;
-import xml.util.bomstring;
+import texi.bomstring;
 
 
 version (GC_STATS)

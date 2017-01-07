@@ -12,7 +12,7 @@ Authors: Michael Rynn
 
 */
 
-module xml.util.buffer;
+module texi.buffer;
 
 import std.utf;
 import std.string;
@@ -109,6 +109,23 @@ uintptr_t removeInit(T)(T[] items, uintptr_t pos = 0)
 struct Buffer(T)
 {
 	/// Adapted from std.algorithm, with some assert conditions removed
+
+	// implement put for forwarding to formatValue
+	struct OutputRange {
+        private Buffer* outer_;
+
+        this(Buffer* data)
+        {
+            assert(data != null);
+            outer_ = data;
+        }
+    public:
+        void put(T value)
+        {
+            outer_.put(value);
+        }
+	};
+
     struct Range
     {
 		// Writeable, and ignores reference count. Writes change without copyOnWrite
@@ -404,6 +421,11 @@ struct Buffer(T)
             kap = newcap;
             return data;
         }
+	}
+
+	OutputRange writer() @property
+	{
+        return OutputRange(&this);
 	}
 	/// Get a writeable range.
     Range opSlice()

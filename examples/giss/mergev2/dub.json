@@ -1,0 +1,21 @@
+{
+	"name": "mergev2",
+	"targetName" : "mergev2",
+	"targetType" : "executable",
+	"mainSourceFile" : "src/mergev2.d",
+	"authors": [
+		"Michael Rynn"
+	],
+	"importPaths" : ["../../", "src/"],
+	"description": "merge sort of 2 giss v2 files",
+	"copyright": "Copyright © 2016, Michael Rynn",
+	"license": "Artistic-2.0",
+	
+	"sourceFiles" : [
+		"../../../texi/buffer.d",
+		"../../../texi/read.d",
+		"../../../texi/bomstring.d",
+		"../../../texi/inputEncode.d",
+	]
+	
+}

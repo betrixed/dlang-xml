@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="merge" />
+		<Option pch_mode="2" />
+		<Option compiler="dmd" />
+		<Build>
+			<Target title="Debug">
+				<Option output="merge_exe" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../merge" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="dmd" />
+				<Option parameters="--output byrd_merge.txt byrd_1.txt byrd_r.txt byrd_3.txt" />
+				<Compiler>
+					<Add option="-g" />
+					<Add option="-debug" />
+					<Add option="-I../../../" />
+				</Compiler>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/merge" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="dmd" />
+				<Compiler>
+					<Add option="-O" />
+				</Compiler>
+			</Target>
+		</Build>
+		<Unit filename="../../../texi/bomstring.d" />
+		<Unit filename="../../../texi/buffer.d" />
+		<Unit filename="../../../texi/inputEncode.d" />
+		<Unit filename="../../../texi/read.d" />
+		<Unit filename="src/merge.d" />
+		<Extensions>
+			<code_completion />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

@@ -40,12 +40,12 @@ alias bool function(Char32pull src, ref dchar c) Recode32Fn;
 
 ---
 */
-module xml.util.inputEncode;
+module texi.inputEncode;
 
 import core.exception;
 import std.system, std.stdint, std.stdio;
 import std.conv, std.string, std.traits, std.exception;
-import xml.util.buffer;
+import texi.buffer;
 
 /// The character sequence was broken unexpectedly, or had an illegal encoding character.
 class CharSequenceError :  Exception

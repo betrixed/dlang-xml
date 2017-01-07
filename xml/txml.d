@@ -22,7 +22,7 @@ Authors:   Michael Rynn
 import std.typecons : tuple, Tuple;
 import std.string, std.stdint, std.utf;
 import std.algorithm;
-import xml.util.buffer;
+import texi.buffer;
 //import std.container.array;
 import std.array;
 import std.traits;
@@ -422,9 +422,10 @@ static string badCharMsg(dchar c)
 	return format("bad character 0x%x [%s]\n", val, c);
 }
 
+
 /**
 Read only character array range, output dchar.
-*/
+
 struct  ReadRange(T)
 {
 private:
@@ -491,92 +492,7 @@ public:
 
 
 }
-
-
-/// number class returned by parseNumber
-enum NumberClass
-{
-    NUM_ERROR = -1,
-    NUM_EMPTY,
-    NUM_INTEGER,
-    NUM_REAL
-};
-
-/**
-Parse regular decimal number strings.
-Returns -1 if error, 0 if empty, 1 if integer, 2 if floating point.
-and the collected string.
-No NAN or INF, only error, empty, integer, or real.
-process a string, likely to be an integer or a real, or error / empty.
 */
-
-NumberClass
-parseNumber(R,W)(ref R rd, auto ref W wr,  int recurse = 0 )
-{
-    int   digitct = 0;
-    bool  done = rd.empty;
-    bool  decPoint = false;
-    for(;;)
-    {
-        if (done)
-            break;
-        auto test = rd.front;
-        switch(test)
-        {
-			case '-':
-			case '+':
-				if (digitct > 0)
-				{
-					done = true;
-				}
-				break;
-			case '.':
-				if (!decPoint)
-					decPoint = true;
-				else
-					done = true;
-				break;
-			default:
-				if (!std.ascii.isDigit(test))
-				{
-					done = true;
-					if (test == 'e' || test == 'E')
-					{
-						// Ambiguous end of number, or exponent?
-						if (recurse == 0)
-						{
-
-							auto tempRd = rd;
-							tempRd.popFront(); // pop the test character
-							char[] tempWr;
-							if (parseNumber(tempRd,tempWr, recurse+1)==NumberClass.NUM_INTEGER)
-							{
-                                rd = tempRd;
-                                wr ~= (cast(char)test);
-                                wr ~= tempWr;
-								return NumberClass.NUM_REAL; // TODO: if no decimal point, and exponent is +ve, then could also be integer
-                            }
-						}
-						// assume end of number
-					}
-				}
-				else
-					digitct++;
-				break;
-        }
-        if (done)
-            break;
-        wr ~= (cast(char)test);
-        rd.popFront();
-        done = rd.empty;
-    }
-    if (decPoint)
-        return NumberClass.NUM_REAL;
-    if (digitct == 0)
-        return NumberClass.NUM_EMPTY;
-    return NumberClass.NUM_INTEGER;
-};
-
 
 
 void putRadix(T,S)(ref T[] appd, S value,uint radix = 10)

@@ -4,7 +4,7 @@ import stdxml = xml.std.xmlSlicer;
 import std.stdio;
 import std.file;
 import std.datetime;
-import core.memory, xml.util.buffer, xml.util.gcstats;
+import core.memory, xml.util.buffer, texi.gcstats;
 import xml.xmlLinkDom;
 import xml.util.bomstring;
 import xml.dom.domt;

@@ -8,10 +8,11 @@
 		<Build>
 			<Target title="Debug">
 				<Option output="../speed64d" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../examples/speed2" />
 				<Option object_output="Debug/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
-				<Option use_console_runner="0" />
+				<Option parameters="--input books.xml" />
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />
@@ -20,9 +21,11 @@
 			</Target>
 			<Target title="Release">
 				<Option output="../speed64r" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../examples/speed2" />
 				<Option object_output="Release/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
+				<Option parameters="--input books.xml" />
 				<Compiler>
 					<Add option="-O" />
 					<Add option="-I../../../ -version=BUF_NATIVE" />
@@ -30,17 +33,17 @@
 			</Target>
 		</Build>
 		<Unit filename="../../../examples/speed2/source/speed2.d" />
+		<Unit filename="../../../texi/bomstring.d" />
+		<Unit filename="../../../texi/buffer.d" />
+		<Unit filename="../../../texi/gcstats.d" />
+		<Unit filename="../../../texi/inputEncode.d" />
+		<Unit filename="../../../texi/inputblock.d" />
+		<Unit filename="../../../texi/read.d" />
 		<Unit filename="../../../xml/dom/domt.d" />
 		<Unit filename="../../../xml/dom/dtdt.d" />
 		<Unit filename="../../../xml/std/xmlSlicer.d" />
-		<Unit filename="../../../xml/textInput.d" />
 		<Unit filename="../../../xml/txml.d" />
-		<Unit filename="../../../xml/util/bomstring.d" />
-		<Unit filename="../../../xml/util/buffer.d" />
-		<Unit filename="../../../xml/util/gcstats.d" />
-		<Unit filename="../../../xml/util/inputEncode.d" />
-		<Unit filename="../../../xml/util/print.d" />
-		<Unit filename="../../../xml/util/read.d" />
+		<Unit filename="../../../xml/util/filepath.d" />
 		<Unit filename="../../../xml/xmlArrayDom.d" />
 		<Unit filename="../../../xml/xmlAttribute.d" />
 		<Unit filename="../../../xml/xmlChar.d" />

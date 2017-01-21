@@ -5,12 +5,14 @@ Trade offs include, the number of function calls and call-backs, size of the cha
 */
 
 import std.stdint;
-import std.datetime;
+import core.time;
 import std.file;
-import xml.util.buffer;
+import texi.buffer;
+import texi.inputblock;
+
 version(GC_STATS)
 {
-	import xml.util.gcstats;
+	import texi.gcstats;
 	import xml.std.xmlSlicer;
 }else {
 	import std.xml;
@@ -21,13 +23,12 @@ import std.stdio;
 import core.memory;
 import std.random;
 import std.conv;
-import xml.util.bomstring;
+import texi.bomstring;
 import xml.xmlAttribute;
 import std.container.array;
 import std.algorithm;
 import std.string;
 import std.range;
-import xml.textInput;
 import xml.xmlParser;
 import xml.txml;
 import xml.xmlLinkDom;
@@ -44,12 +45,28 @@ struct Book
     string description;
 }
 
-double timedSeconds(ref StopWatch sw)
-{
-    auto duration = sw.peek();
+struct Timer {
+    MonoTime before_;
+    MonoTime after_;
 
-    return duration.to!("seconds",double)();
-}
+    void start()
+    {
+        before_ = MonoTime.currTime;
+    }
+
+    void stop()
+    {
+        after_ = MonoTime.currTime;
+    }
+
+    double timedSeconds()
+    {
+        auto duration = after_.ticks - before_.ticks;
+
+        return cast(double)(ticksToNSecs(duration))/1_000_000_000;
+    }
+};
+
 
 void fullCollect()
 {
@@ -80,7 +97,7 @@ void StdXmlRun( string input)
 void simpleBookLoad(string s)
 {
     // Check for well-formedness
-   check(s);
+    check(s);
 
     // Take it apart
     Book[] books;
@@ -125,12 +142,10 @@ void simpleBookLoad(string s)
     writefln(join(doc.pretty(3),"\n"));
 }
 
-void testXmlInput(string s)
+void testXmlInput(char[] s)
 {
-
-	auto xin = new InputCharRange!char();
-
-	xin.entireText(s);
+	auto xin = new RecodeInput();
+	xin.setArray(s);
 
 	while(!xin.empty())
 	{
@@ -145,46 +160,45 @@ class SliceResults(T) : xmlt!T.NullDocHandler  {
 
 	alias xmlt!T.XmlErrorImpl XmlErrorImpl;
 
-	void parseSlice(immutable(T)[] xml)
+	void parseSlice(T[] xml)
 	{
 		auto parser = new XmlParser!T();
 		parser.errorInterface = new XmlErrorImpl();
 		parser.docInterface = this;
-		parser.initSource(xml);
+		parser.source = RecodeInput.fromArray(xml);
 		parser.parseAll();
 	}
 
 }
-void dxmlSliceThroughPut(T,S)(immutable(S)[] xml)
+void dxmlSliceThroughPut(T,S)(S[] xml)
 {
 	auto dummy = new SliceResults!(S)();
 	dummy.parseSlice(xml);
 }
 
-auto dxmlMakeDoc(T,S)(immutable(S)[] s)
+auto dxmlMakeDoc(T,S)(S[] s)
 {
 	alias xml.dom.domt.XMLDOM!T	xmldom;
 
-	auto builder = new DXmlDomBuild!(T)();
+	auto builder = new DXmlDomBuild!T();
 	auto doc = new xmldom.Document();
-	builder.parseNoSlice!S(doc, s);
+	builder.parseSlice!S(doc, s);
 	return doc;
 }
 // parser and dom assembly independent of source character type
-void dxmlLinkDom(T,S)(immutable(S)[] s)
+void dxmlLinkDom(T,S)(S[] s)
 {
 	auto doc = dxmlMakeDoc!(T,S)(s);
-
 	version(Explode)
 	{
 		doc.explode();
 	}
 }
 
-void testPrintDom(T)(string s)
+void testPrintDom(T)(T[] s)
 {
 	alias xml.dom.domt.XMLDOM!T	xmldom;
-    void dgStdOut(const(T)[] s)
+    void dgStdOut(in T[] s)
 	{
 		write(s);
 	}
@@ -195,7 +209,7 @@ void testPrintDom(T)(string s)
 double testHackBuf(uintptr_t repeats, uintptr_t bsize)
 {
 	Buffer!char	hackBuf;
-	StopWatch sw;
+	Timer sw;
 	sw.start();
 	for(uintptr_t i = 0; i < repeats; i++)
 	{
@@ -206,7 +220,7 @@ double testHackBuf(uintptr_t repeats, uintptr_t bsize)
 
 	}
 	sw.stop();
-	auto stime = timedSeconds(sw);
+	auto stime = sw.timedSeconds();
 	writefln("HackBuf = %s",stime);
 	return stime;
 }
@@ -214,7 +228,7 @@ double testHackBuf(uintptr_t repeats, uintptr_t bsize)
 double testNativeBuf(uintptr_t repeats, uintptr_t bsize)
 {
 	char[]		nativeBuf;
-	StopWatch sw;
+	Timer sw;
 	sw.start();
 	for(uintptr_t i = 0; i < repeats; i++)
 	{
@@ -225,7 +239,7 @@ double testNativeBuf(uintptr_t repeats, uintptr_t bsize)
 
 	}
 	sw.stop();
-	auto stime = timedSeconds(sw);
+	auto stime = sw.timedSeconds();
 	writefln("NativeBuf = %s",stime);
 	return stime;
 
@@ -241,8 +255,9 @@ void runTests(string inputFile, uintptr_t runs)
 {
 	int bomMark = -1;
 
-    auto s = readFileBom!char(inputFile, bomMark);
+    auto content = readFileBom!char(inputFile, bomMark);
 
+    auto s = to!string(content);
 	simpleBookLoad(s);
 	testValidate(s);
 	fullCollect();
@@ -251,13 +266,14 @@ void runTests(string inputFile, uintptr_t runs)
 	double[numTests] sum;
 	double[numTests] sample;
 
-	testPrintDom!char(s);
+	testPrintDom!char(content);
 
 	sum[] = 0.0;
 
-	StopWatch sw;
+	Timer sw;
 	double ms2 = 0;
 	writeln("\n 10 repeats., rotate sequence.");
+    getchar();
 
 	const uint repeat_ct = 10;
 	auto testIX = new uintptr_t[numTests];
@@ -282,7 +298,7 @@ void runTests(string inputFile, uintptr_t runs)
                         StdXmlRun(s);
                     }
                     sw.stop();
-					sample[startix] = timedSeconds(sw);
+					sample[startix] = sw.timedSeconds();
                     break;
                 case 1:
 					sw.start();
@@ -292,7 +308,7 @@ void runTests(string inputFile, uintptr_t runs)
                         //test_throughput(s);
                     }
                     sw.stop();
-					sample[startix] = timedSeconds(sw);
+					sample[startix] = sw.timedSeconds();
 
                     break;
 
@@ -300,37 +316,35 @@ void runTests(string inputFile, uintptr_t runs)
                     sw.start();
                     for(i = 0;  i < runs; i++)
                     {
-                        testXmlInput(s);
+                        testXmlInput(content);
                     }
                     sw.stop();
-					sample[startix] = timedSeconds(sw);
+					sample[startix] = sw.timedSeconds();
                     break;
                 case 3:
 					sw.start();
                     for(i = 0;  i < runs; i++)
                     {
-                        dxmlSliceThroughPut!(char,char)(s);
+                        dxmlSliceThroughPut!(char,char)(content);
                     }
                     sw.stop();
-					sample[startix] = timedSeconds(sw);
+					sample[startix] = sw.timedSeconds();
                     break;
                 case 4:
 					sw.start();
                     for(i = 0;  i < runs; i++)
                     {
-                        dxmlLinkDom!(char,char)(s);
+                        dxmlLinkDom!(char,char)(content);
                         //test_throughput(s);
                     }
                     sw.stop();
-					sample[startix] = timedSeconds(sw);
+					sample[startix] = sw.timedSeconds();
                     break;
                 case 5:
                     break;
                 default:
                     break;
 			}
-
-			sw.reset();
 		}
 		foreach(v ; sample)
             writef(" %6.3f", v);

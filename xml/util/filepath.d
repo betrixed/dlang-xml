@@ -1,4 +1,4 @@
-module xml.util.read;
+module xml.util.filepath;
 
 
 import std.path, std.stdio, std.file;

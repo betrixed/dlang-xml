@@ -10,11 +10,11 @@ Template delegates to hand on  XML events
 ---
 */
 
-import xml.util.buffer;
-import xml.util.gcstats;
+import texi.buffer;
+import texi.gcstats;
 import xml.txml;
 import xml.xmlParser;
-import xml.util.inputEncode;
+import texi.inputEncode;
 
 import std.variant, std.stdint;
 

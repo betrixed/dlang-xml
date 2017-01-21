@@ -10,13 +10,14 @@ Classes to recode input into a dchar buffer.
 
 */
 
-module xml.textInput;
+module texi.filebuffer;
 
 import xml.xmlError;
 import std.stdint;
 import std.traits;
 import core.exception;
 import xml.txml;
+import texi.read;
 import texi.inputEncode;
 //import xml.parseitem;
 import std.stdint;
@@ -32,65 +33,14 @@ import texi.bomstring;
 
 version (GC_STATS)
 {
-	import xml.util.gcstats;
+	import texi.gcstats;
 }
 
-
-
-/**
-    Abstract class template of ReadBuffer
-*/
-class ReadBuffer(T)
-{
-protected:
-    bool eof_; // Just had LAST FILL!
-public:
-
-	this()
-	{
-		eof_ = true;
-	}
-
-    @property bool isEOF()
-    {
-        return eof_;
-    }
-    bool setEncoding(string encoding)
-    {
-        return false;
-    }
-    bool setBufferSize(uint bsize)
-    {
-        return false;
-    }
-    bool fillData(ref const(T)[] buffer, ref ulong sourceRef)
-    {
-        return false;
-    }
-}
-
-/**
-
-Data is provided from any source by the $(D MoreDataDgate).
-An optional $(I EmptyNotify) delegate is called if the InputFileBuffer!(T) returns false.
-Data can be pushed back onto an input stack.
-The input stack is used up first before the primary source.
-This implementation takes the step of having popFront set the
-values of both front_ and empty_.
-
-The method pumpStart exists to get the stream
-going for the first time. The empty property will be true unless pumpStart is called.
-
-This range is primed by setting arraySource, or dataSource property,
-and then calling pumpStart. If the input is already exhausted, then empty will
-still become true after the pumpStart.
-
-InputCharRange mostly ignores UTF encoding.
-
-
+/* Not a descendant of InputRange, but a buffer with callbacks for refill, and input range features
+    Has a non-virtual delegate  / function   bool pull(ref T), to return next T, or not.
 */
 
-class InputCharRange(T)
+class InputCharBuffer(T)
 {
     /// Delegate to refill the buffer with data,
     alias ReadBuffer!(T)	DataFiller;
@@ -108,17 +58,16 @@ class InputCharRange(T)
 
     protected
     {
-		T[]					stack_; // push back
-        //Buffer!(T[])		stack_; // push back
+		T[]				stack_; // push back
         bool				empty_;
         T					front_;
 
-        const(T)[]					str_;  // alias of a buffer to be filled by a delegate
-        size_t						nextpos_; // index into string
+        const(T)[]				str_;  // alias of a buffer to be filled by a delegate
+        size_t					nextpos_; // index into string
 
-        DataFiller	        df_; // buffer filler
+        DataFiller	            df_; // buffer filler
         EmptyNotify			onEmpty_;
-        ulong				srcRef_;  // original source reference, if any
+        ulong				    srcRef_;  // original source reference, if any
 
         /// push stack character without changing value of front_
         void pushInternalStack(T c)
@@ -336,6 +285,7 @@ final void convertPushFront(U : U[])(const(U)[] s)
         return false;
     }
     /// Return the front character if not empty, and call popFront
+    /// Got to be this way, to manage in single call
     final bool pull(ref T next)
     {
         if (!empty_)
@@ -370,89 +320,6 @@ final void convertPushFront(U : U[])(const(U)[] s)
             return false;
     }
 
-}
-
-/**
-    Can pushFront dchar or dchar[] onto a stack, which is emptied first.
-    popFront is done in constructor, so that empty and front, both mandatory calls, are as fast as possible.
-    Property index points to position of front in data string, only if stack_ was empty on last popFront.
-*/
-
-struct ParseInputRange(T)
-{
-    const(T)[]			data;
-    uintptr_t           index_;
-    uintptr_t			pos = 0;
-    dchar				front;
-    bool				empty;
-    Buffer!dchar	stack_;
-
-    // refers to front if stack_ was empty last popFront
-    @property uintptr_t index()
-    {
-        return index_;
-    }
-
-    // refers to front if stack_ was empty last popFront
-    @property uintptr_t nextIndex()
-    {
-        return pos;
-    }
-    this(const(T)[] s)
-    {
-        data = s;
-        popFront();
-    }
-
-    void pushFront(dchar c)
-    {
-        if (!empty)
-            stack_.put(front);
-        else
-            empty = false;
-        front = c;
-
-    }
-    /// push a bunch of UTF32 characters in front of everything else, in reverse.
-    void pushFront(const(dchar)[] s)
-    {
-        if (s.length == 0)
-            return;
-        if (!empty)
-            stack_.put(front);
-        else
-            empty = false;
-        auto slen = s.length;
-        while (slen-- > 1)
-            stack_.put(s[slen]);
-        front = s[0];
-    }
-
-    void popFront()
-    {
-        if (stack_.length > 0)
-        {
-            front = stack_.back();
-			stack_.popBack();
-            return;
-        }
-        if (pos < data.length)
-        {
-            index_ = pos;
-            static if (is(T==char) || is(T==wchar))
-            {
-                front = decode(data,pos);
-            }
-            else
-            {
-                front = data[pos++];
-            }
-        }
-        else {
-            index_ = pos;
-            empty = true;
-        }
-    }
 }
 
 /**
@@ -555,8 +422,6 @@ public:
 
 }
 
-
-
 class FileReader(T) :  ReadBuffer!(T)
 {
 	version (GC_STATS)
@@ -614,21 +479,21 @@ class FileReader(T) :  ReadBuffer!(T)
 
 /// Connection of raw streams (data buffer fillers) to decoding InputRange
 
-alias	FileReader!(char)   CharFiller;
-alias	FileReader!(wchar)  WCharFiller;
-alias	FileReader!(dchar)  DCharFiller;
 
-alias	InputCharRange!(char) CharIR;
-alias	InputCharRange!(wchar) WCharIR;
-alias	InputCharRange!(dchar) DCharIR;
+alias	InputCharBuffer!(char) CharIR;
+alias	InputCharBuffer!(wchar) WCharIR;
+alias	InputCharBuffer!(dchar) DCharIR;
 
-alias RecodeChar!(CharIR)	Recode8;
+alias RecodeChar!(CharIR)	    Recode8;
 alias RecodeWChar!(WCharIR)	Recode16;
 alias RecodeDChar!(DCharIR)	Recode32;
 
-/// Big complicated class to provide a single interface to different kinds of encoded inputs.
+/**
+ InputDChar
+ Provide input range feeder of dchar from any sort of underlying encoded text file
+ */
 
-class XmlFileReader :  ReadBuffer!(dchar)
+class File_dchar :  ReadBuffer!(dchar)
 {
     // inherit ParseInput so can use buffer and pointer to member function type
 
@@ -647,10 +512,8 @@ class XmlFileReader :  ReadBuffer!(dchar)
     CharIR  cir_;
     Recode8.RecodeFunc charDo_;
 
-
     WCharIR wir_;
     Recode16.RecodeFunc wcharDo_;
-
 
     DCharIR dir_;
     Recode32.RecodeFunc dcharDo_;

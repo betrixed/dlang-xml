@@ -11,7 +11,7 @@ enum XmlErrorLevel {
 
 version(GC_STATS)
 {
-	import xml.util.gcstats;
+	import texi.gcstats;
 
 }
 class XmlError : Exception {

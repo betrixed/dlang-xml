@@ -49,8 +49,9 @@ import std.variant;
 import std.array;
 import std.exception;
 
-import xml.textInput;
-import xml.util.buffer;
+import texi.buffer;
+import texi.read;
+
 import xml.txml;
 import xml.util.jisx0208;
 import xml.xmlParser;
@@ -60,11 +61,13 @@ import std.stdint;
 * Test record from tests file
 **/
 
-import xml.dom.domt, xml.util.read, testSuite;
+import xml.dom.domt;
+
+import testSuite;
 import std.file;
 version(GC_STATS)
 {
-	import xml.util.gcstats;
+	import texi.gcstats;
 	import core.memory;
 }
 
@@ -149,7 +152,7 @@ int main(string[] args)
         writeUsage();
         return 0;
     }
-	EUC_JP!(CharIR).register("EUC-JP");
+
 
 	int result = TestType!(char)(args);
 	if (result == 0)

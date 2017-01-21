@@ -11,7 +11,7 @@ SAX xml event Template delegates to get call backs on Xml Parse events
 */
 
 
-import xml.util.gcstats;
+import texi.gcstats;
 import xml.txml;
 import xml.xmlParser;
 import xml.textInput;
@@ -43,7 +43,7 @@ template XMLSAX(T) {
 		// experience tells that GC should not be always taken for granted
 		version (GC_STATS)
 		{
-			import xml.util.gcstats;
+			import texi.gcstats;
 			mixin GC_statistics;
 			static this()
 			{

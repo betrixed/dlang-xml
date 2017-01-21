@@ -253,7 +253,7 @@ pure bool isNameChar10(dchar c) @system
     )
         return true;
     else
-        return isLetter(c) || isDigit(c) || isCombiningChar(c) || isExtender(c);
+        return isLetter(c) || isXmlDigit(c) || isCombiningChar(c) || isExtender(c);
 
 }
 
@@ -325,7 +325,7 @@ pure bool isControl(dchar c)
  * Params:
  *    c = the character to be tested
  */
-pure bool isDigit(dchar c)
+pure bool isXmlDigit(dchar c)
 {
     if (c <= 0x0039 && c >= 0x0030)
         return true;
@@ -699,6 +699,6 @@ unittest
     debug (stdxml_TestHardcodedChecks)
     {
         foreach (c; 0 .. dchar.max + 1)
-            assert(isDigit(c) == lookup(DigitTable, c));
+            assert(isXmlDigit(c) == lookup(DigitTable, c));
     }
 }

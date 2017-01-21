@@ -17,17 +17,23 @@ module xml.util.print;
 version=ATTRIBUTE_BLOCK;
 
 import xml.xmlChar;
+import xml.xmlAttribute;
+
 import std.array;
 import std.exception;
 import std.conv;
 import std.string;
 import std.stdint;
-import xml.util.buffer;
-
+import texi.buffer;
+import xml.txml;
 
 template XMLPrint(T)
 {
 	alias void delegate(const(T)[] s)	StringPutDg;
+    alias xmlt!T.XmlString XmlString;
+
+    alias XMLAttribute!T.AttributeMap AttributeMap;
+    alias XMLAttribute!T.XmlAttribute XmlAttribute;
 
 	alias XmlString[dchar] CharEntityMap;
 	static if (is(T==char))
@@ -190,7 +196,7 @@ struct XmlPrinter
         immutable original = pack.length;
         immutable taglen = tag.length;
         pack.length = original + indent + taglen + 1;
-        auto buf = pack.toArray[original..$];
+        auto buf = pack.data[original..$];
         uintptr_t i = indent;
         if (i > 0)
             buf[0..i] = ' ';
@@ -203,7 +209,7 @@ struct XmlPrinter
         immutable original = pack.length;
         immutable taglen = tag.length;
         pack.length = original + indent + taglen + 3;
-        auto buf = pack.toArray[original..$];
+        auto buf = pack.data[original..$];
         buf[0..indent] = ' ';
         uintptr_t i = indent;
         buf[i++] = '<';
@@ -278,7 +284,7 @@ struct XmlPrinter
 	{
 		foreach(n,v ; map)
 		{
-			ap.put(AttributeMap.BlockRec(n,v));
+			ap.push(n,v);
 		}
 	}
 
@@ -293,18 +299,24 @@ struct XmlPrinter
 		pack.put("</");
 		pack.put(ename);
 		pack.put('>');
-        options.putDg(pack.toArray);
+        options.putDg(pack.data);
     }
     /// Element containing no attributes and single text content. Encode content.
     void  putTextElement(XmlString ename, ref AttributeMap map, XmlString content)
     {
+        AttributeMap ap;
+
+
         pack.length = 0;
         pack.reserve(ename.length * 2 + 5 + content.length);
         appendStartTag(ename);
+
         if (map.length > 0)
 		{
-			AttributeMap ap;
-			ap.copy(map);
+			foreach(ref XmlAttribute r; map)
+            {
+                ap.push(r);
+            }
             appendAttributes(ap);
 		}
         pack.put('>');
@@ -312,7 +324,7 @@ struct XmlPrinter
 		pack.put("</");
 		pack.put(ename);
 		pack.put('>');
-        options.putDg(pack.toArray);
+        options.putDg(pack.data);
     }
     /// indented start tag without attributes
     void putStartTag(XmlString tag)
@@ -320,7 +332,7 @@ struct XmlPrinter
         pack.length = 0;
         appendStartTag(tag);
         pack.put('>');
-        options.putDg( pack.toArray );
+        options.putDg( pack.data );
     }
     /// indented start tag with attributes
     void putStartTag(XmlString tag, AttributeMap attr, bool isEmpty)
@@ -330,8 +342,10 @@ struct XmlPrinter
         if (attr.length > 0)
 		{
 			AttributeMap ap;
-			ap.copy(attr);
-            appendAttributes(ap);
+			foreach(ref XmlAttribute x; attr)
+            {
+                ap.push(x);
+            }
 		}
         if (isEmpty)
         {
@@ -348,7 +362,7 @@ struct XmlPrinter
         {
             pack.put('>');
         }
-        options.putDg(pack.toArray);
+        options.putDg(pack.data);
     }
 
     /// indented empty tag, no attributes
@@ -367,20 +381,20 @@ struct XmlPrinter
             appendStartTag(tag);
             pack.put(" />");
         }
-        options.putDg(pack.toArray);
+        options.putDg(pack.data);
     }
     /// indented end tag
     void putEndTag(XmlString tag)
     {
         pack.length = 0;
         appendEndTag(tag);
-        options.putDg(pack.toArray);
+        options.putDg(pack.data);
     }
 
     void putIndent(const(T)[] s)
     {
         pack.length = indent + s.length;
-        auto buf = pack.toArray;
+        auto buf = pack.data;
         uintptr_t i = indent;
         if(i > 0)
             buf[0..i] = ' ';

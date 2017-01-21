@@ -26,13 +26,13 @@ import tempxml = xml.txml;
 template XMLOutput(T)
 {
 	alias tempxml.xmlt!T	txml;
-
+    alias txml.StringPutDg StringPutDg;
 	alias txml.XmlString XmlString;
 	alias txml.CharEntityMap CharEntityMap;
 	alias txml.AttributeMap AttributeMap;
 	alias txml.XmlEvent     XmlEvent;
 
-	alias void delegate(const(T)[] s)	StringPutDg;
+
 	static if (is(T==char))
 		alias std.conv.text	concats;
 	else static if (is(T==wchar))

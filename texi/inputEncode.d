@@ -57,11 +57,11 @@ class CharSequenceError :  Exception
 };
 
 /// Throw a CharSequenceError for invalid character.
-void invalidCharacter(dchar c)
+Exception invalidCharacter(dchar c)
 {
     string msg = format("Invalid character {%x}", c);
 
-    throw new CharSequenceError(msg);
+    return new CharSequenceError(msg);
 }
 
 /+void indexError()
@@ -113,52 +113,76 @@ private static const wstring windows1252_map =
     "\u02DC\u2122\u0161\u203A\u0153\uFFFD\u017E\u0178";
 
 
-
-// Keeping the template InputRange (pull) version as well.
-
-template isPullRange(R)
-{
-    enum bool isPullRange = is(typeof(
-                                   {
-                                       R r;             // can define a range object
-    if (r.empty) {}  // can test for empty
-r.popFront();          // can invoke next
-auto h = r.front; // can get the front of the range
-bool gotit = r.pull(h); // can use pull to do all at once
-                               }
-                               ()));
-}
-
-
-/** Mass buffer decode for char to dchar.
-Fills dchar[] array, till dchar[] array is full, or src array is exhausted, or has not enough
-characters to finish a UTF sequence.  Returns number of source characters consumed, and
-number of characters converted,
+/** Provide a way of getting more characters, eg from a file.
+   Provide a way of returning the unused part of source, when destination full.
 */
+enum ProvideDgWant {
+    // setup array reference with more data, such that length > 0
+    INIT_DATA = 0,
+    // save array reference to unused data
 
-uintptr_t decode_char(const(char)[] src, dchar[] dest, ref uintptr_t pos )
+    MORE_DATA = 1,
+    UNUSED_DATA = 2,
+
+    /* invalid character, and unused data.
+       Return true to throw invalidChar exception, false to abort */
+    DATA_ERROR = 3
+    };
+
+// delegates and function types
+alias bool delegate(ProvideDgWant wants, ref char[] src) MoreCharDg;
+alias uintptr_t function(MoreCharDg dg, dchar[] dest) RecodeCharFn;
+
+alias bool delegate(ProvideDgWant wants, ref wchar[] src) MoreWCharDg;
+alias uintptr_t function(MoreWCharDg dg, dchar[] dest) RecodeWCharFn;
+
+alias bool delegate(ProvideDgWant wants, ref dchar[] src) MoreDCharDg;
+alias uintptr_t function(MoreDCharDg dg, dchar[] dest) RecodeDCharFn;
+
+uintptr_t
+recode_utf8(MoreCharDg dg, dchar[] dest)
 {
-    size_t ix = pos;
-    size_t destix = 0;
+    uintptr_t ix = 0;
+    char[]  src;
 
-    immutable last = src.length;
-
-    while (destix < dest.length)
+    void choke(dchar d)
     {
-        if (ix >= last)
-            break;   // exhausted source
+        if (dg(ProvideDgWant.DATA_ERROR, src))
+        {
+            throw invalidCharacter(d);
+        }
+    }
 
-        dchar d32 = src[ix++];
+    bool refill()
+    {
+        if (src is null)
+        {
+            return dg(ProvideDgWant.INIT_DATA, src);
+        }
+        else {
+             return dg(ProvideDgWant.MORE_DATA, src);
+        }
+    }
+    while (ix < dest.length)
+    {
+        if (src.length == 0)
+        {
+            if (!refill())
+                return ix;
+        }
+        dchar d32 = src[0];
 
         if (d32 < 0x80)
         {
-            dest[destix++] = d32;
+            dest[ix++] = d32;
+            src = src[1..$]; //! OK, so advance
             continue;
         }
 
         if (d32 < 0xC0)
         {
-            invalidCharacter(d32);
+             choke(d32);
+             return ix;
         }
 
         int tails = void;
@@ -184,347 +208,321 @@ uintptr_t decode_char(const(char)[] src, dchar[] dest, ref uintptr_t pos )
         }
         else
         {
-            invalidCharacter(d32);
+            choke(d32);
+            return ix;
         }
-        if (ix + tails > src.length)
-        {
-			pos = ix-1;
-			return destix;
-		}
+        src = src[1..$]; //! OK, so advance
         while(tails--)
         {
-            d32 = (d32 << 6) + (src[ix++] & 0x3F);
+            if (src.length == 0)
+            {
+                if (!refill())
+                    return ix;
+            }
+            d32 = (d32 << 6) + (src[0] & 0x3F);
+            src = src[1..$];
         }
-        dest[destix++] = d32;
+        dest[ix++] = d32;
     }
-    pos = ix;
-    return destix;
-}
-/** Mass buffer decode for wchar to dchar.
-Fills dchar[] array, till dchar[] array is full, or src array is exhausted, starting at pos
-return number of dest array characters filled, and number of source characters converted.
-*/
-size_t decode_wchar(const(wchar)[] src, dchar[] dest, ref size_t pos )
-{
-    size_t ix = pos;
-    size_t destix = 0;
-
-    immutable last = src.length;
-
-    while (destix < dest.length)
-    {
-        if (ix >= last)
-            break; // exhausted source
-        dchar d32 = src[ix++];
-
-        if (d32 < 0xD800 || d32 >= 0xE000)
-        {
-            dest[destix++] = d32;
-            continue;
-        }
-        if (ix >= last)
-        {
-			pos = ix-1;
-			return destix;
-		}
-        dest[destix++] = 0x10000 + ((d32 & 0x3FF) << 10) + ( src[ix++] & 0x3FF);
-    }
-    pos = ix;
-    return destix;
+    // allow save state
+    dg(ProvideDgWant.UNUSED_DATA,src);
+    return ix;
 }
 
-/** Template for 1 byte character decoders,
-	for PullRange, Delegate, or Functions to get next source character.
-*/
 
-template  RecodeChar(T)
+/// Windows 1252 8 bit recoding
+uintptr_t
+recode_windows1252(MoreCharDg dg, dchar[] dest)
 {
-
-    // Not using table lookup
-    bool recode_UTF8(T rgc, ref dchar c)
+    uintptr_t ix = 0;
+    char[] source;
+    void choke(dchar d)
     {
-        char d8;
-        static if(isDelegate!(T) || isFunctionPointer!(T))
+        if (dg(ProvideDgWant.DATA_ERROR, source))
         {
-            if (!rgc(d8))
-                return false; // empty is ok
+            throw invalidCharacter(d);
         }
-        else static if(isPullRange!(T))
-        {
-            if (!rgc.pull(d8))
-                return false; // empty is ok
-        }
-        else
-        {
-            assert(0);
-        }
-        dchar d = d8;
-        if (d < 0x80)
-        {
-            c = d;
-            return true;
-        }
-
-        if (d < 0xC0)
-        {
-            invalidCharacter(d);
-        }
-
-        int tails = void;
-        if (d < 0xE0)
-        {
-            tails = 1;
-            d = d & 0x1F;
-        }
-        else if (d < 0xF0)
-        {
-            tails = 2;
-            d = d & 0x0F;
-        }
-        else if (d < 0xF8)
-        {
-            tails = 3;
-            d = d & 0x07;
-        }
-        else if (d < 0xFC)
-        {
-            tails = 4;
-            d = d & 0x03;
-        }
-        else
-        {
-            invalidCharacter(d);
-        }
-        while(tails--)
-        {
-            static if(isDelegate!(T) || isFunctionPointer!(T))
-            {
-                if (!rgc(d8))
-                    breakInSequence();
-            }
-            else static if(isPullRange!(T))
-            {
-                if (!rgc.pull(d8))
-                    breakInSequence();
-            }
-            d = (d << 6) + (d8 & 0x3F);
-        }
-        c = d;
-        return true;
     }
 
-    /// Windows 1252 8 bit recoding
-    bool recode_windows1252(T rgc, ref dchar c)
+    while (ix < dest.length)
     {
-        char d8;
-
-        static if(isDelegate!(T) || isFunctionPointer!(T))
+        if (source.length == 0)
         {
-            if (!rgc(d8))
-                return false; // empty is ok
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+                return ix;
         }
-        else static if (isPullRange!(T))
-        {
-            if (!rgc.pull(d8))
-                return false; // empty is ok
-        }
-        dchar test = d8;
+        dchar test = source[0];
+        source = source[1..$];
         dchar result = (test >= 0x80 && test < 0xA0) ? windows1252_map[test-0x80] : test;
         if (result == 0xFFFD)
         {
-            return false;
+            choke(test);
+            return ix;
         }
         else
         {
-            c = result;
-            return true;
+            dest[ix++] = result;
         }
     }
-    /// For Latin 8 bit recoding
-    bool recode_latin1(T rgc, ref dchar c)
+    dg(ProvideDgWant.UNUSED_DATA,source);
+    return ix;
+}
+/// For Latin 8 bit recoding
+uintptr_t recode_latin1(MoreCharDg dg, dchar[] dest)
+{
+    uintptr_t ix = 0;
+    char[] source;
+    while (ix < dest.length)
     {
-        char d8;
-        static if(isDelegate!(T) || isFunctionPointer!(T))
+        if (source.length == 0)
         {
-            if (!rgc(d8))
-                return false; // empty is ok
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+                return ix;
+            assert(source.length > 0);
         }
-        else static if (isPullRange!(T))
-        {
-            if (!rgc.pull(d8))
-                return false; // empty is ok
-        }
-        c = d8;
-        return true;
-    }
 
-    /// For plain ASCII 7-bit recoding
-    bool recode_ascii(T rgc, ref dchar c)
-    {
-        char d8;
-        static if(isDelegate!(T) || isFunctionPointer!(T))
-        {
-            if (!rgc(d8))
-                return false; // empty is ok
-        }
-        else
-        {
-            if (!rgc.pull(d8))
-                return false; // empty is ok
-        }
-        if (d8 < 0x80)
-        {
-            c = d8;
-            return true;
-        }
-        invalidCharacter(d8);
-        return false;
-    }
-
-
-    /// Create a registry of decode functions, index by name
-    alias bool function(T, ref dchar)  RecodeFunc;
-
-    __gshared RecodeFunc[string] g8Decoders;
-
-    /// initialize built in decoders
-    __gshared static this()
-    {
-        register("ISO-8859-1",&recode_latin1);
-        register("UTF-8",&recode_UTF8);
-        register("ASCII",&recode_ascii);
-        register("WINDOWS-1252",&recode_windows1252);
-    }
-
-    /// Add more if required
-    void register(string name, RecodeFunc fn)
-    {
-        string ucase = name.toUpper();
-        g8Decoders[ucase] = fn;
-    }
-
-    /// simple switch lookup
-    RecodeFunc getRecodeFunc(string name)
-    {
-        string ucase = name.toUpper();
-        auto fn = ucase in g8Decoders;
-        return (fn is null) ?  null : *fn;
-    }
+        dest[ix++] = source[0];
+        source = source[1..$];
+     }
+    dg(ProvideDgWant.UNUSED_DATA,source);
+    return ix;
 }
 
+/// For plain ASCII 7-bit recoding
+uintptr_t recode_ascii(MoreCharDg dg, dchar[] dest)
+{
+    uintptr_t ix = 0;
+    char[] source;
+    void choke(dchar d)
+    {
+        if (dg(ProvideDgWant.DATA_ERROR, source))
+        {
+            throw invalidCharacter(d);
+        }
+    }
+
+    while (ix < dest.length)
+    {
+        if (source.length == 0)
+        {
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+                return ix;
+            assert(source.length > 0);
+        }
+
+        dchar test = source[0];
+        source = source[1..$];
+        if (test >= 0x80)
+        {
+            choke(test);
+            return ix;
+        }
+        dest[ix++] = test;
+     }
+    dg(ProvideDgWant.UNUSED_DATA,source);
+    return ix;
+}
+
+private {
+    __gshared RecodeCharFn[string] g8Decoders;
+
+    __gshared static this()
+    {
+        register_CharFn("ISO-8859-1",&recode_latin1);
+        register_CharFn("UTF-8",&recode_utf8);
+        register_CharFn("ASCII",&recode_ascii);
+        register_CharFn("WINDOWS-1252",&recode_windows1252);
+    }
+
+
+}
+/// simple switch lookup
+RecodeCharFn getRecodeCharFn(string name)
+{
+    string ucase = name.toUpper();
+    auto fn = ucase in g8Decoders;
+    return (fn is null) ?  null : *fn;
+}
+    /// Add more if required
+void register_CharFn(string name, RecodeCharFn fn)
+{
+    string ucase = name.toUpper();
+    g8Decoders[ucase] = fn;
+}
+/** Conversion of native UTF16 character array source to dchar buffer.
+     Driven by dchar[] size and MoreCharDg capacity
+*/
+
+
+uintptr_t
+recode_utf16(MoreWCharDg dg, dchar[] dest)
+{
+    uintptr_t ix = 0;
+    wchar[]  source;
+    void choke(dchar d)
+    {
+        if (dg(ProvideDgWant.DATA_ERROR, source))
+        {
+            throw invalidCharacter(d);
+        }
+    }
+
+    while (ix < dest.length)
+    {
+        if (source.length==0)
+        {
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+            {
+                return ix;
+            }
+            assert(source.length > 0);
+        }
+
+        dchar d32 = source[0];
+        source = source[1..$];
+
+        if (d32 < 0xD800 || d32 >= 0xE000)
+        {
+            dest[ix++] = d32;
+            continue;
+        }
+        if (source.length==0)
+        {
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+            {
+                choke(d32);
+                return ix;
+            }
+            assert(source.length > 0);
+        }
+        dest[ix++] = cast(dchar) 0x10000 + ((d32 & 0x3FF) << 10) + (source[0] & 0x3FF);
+        source = source[1..$];
+    }
+    dg(ProvideDgWant.UNUSED_DATA,source);
+    return ix;
+}
 
 /** 16 bit characters may need endian byte swap **/
 
-template RecodeWChar(T)
+/** UTF-16 wrong endian to UTF-32 ?**/
+uintptr_t recode_swap_utf16(MoreWCharDg dg, dchar[] dest)
 {
+    uintptr_t ix = 0;
+    wchar[]  source;
+    wswapchar swp = void;
+    wswapchar result = void;
 
-    alias bool function(T, ref dchar)  RecodeFunc;
-
-    /** UTF-16 after byte reversal recoded as UTF-32 **/
-    bool recode_swap_utf16(T rgw, ref dchar c)
+    void choke(wchar d)
     {
-        wswapchar swp = void;
-        wswapchar result = void;
-        static if(isDelegate!(T) || isFunctionPointer!(T))
+        if (dg(ProvideDgWant.DATA_ERROR, source))
         {
-            if (!rgw(swp.w0))
-                return false;
+            throw invalidCharacter(d);
         }
-        else static if (isPullRange!(T))
+    }
+    while (ix < dest.length)
+    {
+        if (source.length==0)
         {
-            if (!rgw.pull(swp.w0))
-                return false;
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+            {
+                return ix;
+            }
+            assert(source.length > 0);
         }
+        swp.w0 = source[0];
+        source = source[1..$];
+
         result.c.c0 = swp.c.c1;
         result.c.c1 = swp.c.c0;
 
         if (result.w0 < 0xD800 || result.w0 >= 0xE000)
         {
-            c = result.w0;
-            return true;
+            dest[ix++] = result.w0;
+            continue;
         }
 
         dchar d = result.w0 & 0x3FF;
-        static if(isDelegate!(T) || isFunctionPointer!(T))
+        if (source.length==0)
         {
-            if (!rgw(swp.w0))
-                return false;
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+            {
+                choke(result.w0);
+                return ix;
+            }
+            assert(source.length > 0);
         }
-        else
-        {
-            if (!rgw.pull(swp.w0))
-                return false;
-        }
+        swp.w0 = source[0];
+        source = source[1..$];
+
         result.c.c0 = swp.c.c1;
         result.c.c1 = swp.c.c0;
 
-        c = 0x10000 + ((result.w0 & 0x3FF) << 10) + d;
-        return true;
+        dest[ix++] = 0x10000 + ((result.w0 & 0x3FF) << 10) + d;
     }
-    /** UTF-16 in system endian to UTF-32 **/
-    bool recode_utf16(T rgw, ref dchar c)
+    dg(ProvideDgWant.UNUSED_DATA,source);
+    return ix;
+}
+
+/// select recode function based on name.
+RecodeWCharFn getRecodeWCharFn(string name)
+{
+    string upcase = name.toUpper();
+    switch(name)
     {
-        wchar w16;
-
-        static if(isDelegate!(T) || isFunctionPointer!(T))
-        {
-            if (!rgw(w16))
-                return false;
-        }
-        else static if (isPullRange!(T))
-        {
-            if (!rgw.pull(w16))
-                return false;
-        }
-
-        dchar result = w16;
-        if (result < 0xD800 || result >= 0xE000)
-        {
-            c = result;
-            return true;
-        }
-
-        static if(isDelegate!(T) || isFunctionPointer!(T))
-        {
-            if (!rgw(w16))
-                return false;
-        }
-        else static if (isPullRange!(T))
-        {
-            if (!rgw.pull(w16))
-                return false;
-        }
-
-        c = 0x10000 + ((result&0x3FF) << 10) + ( w16 & 0x3FF);
-        return true;
-    }
-
-    /// select recode function based on name.
-    RecodeFunc getRecodeFunc(string name)
-    {
-        string upcase = name.toUpper();
-        switch(name)
-        {
-        case "UTF-16LE":
-            if (endian == Endian.bigEndian)
-                return &recode_swap_utf16;
-            else
-                return &recode_utf16;
-
-        case "UTF-16BE":
-            if (endian == Endian.bigEndian)
-                return &recode_utf16;
-            else
-                return &recode_swap_utf16;
-
-        case "UTF-16":
+    case "UTF-16LE":
+        if (endian == Endian.bigEndian)
+            return &recode_swap_utf16;
+        else
             return &recode_utf16;
 
-        default:
-            return null;
-        }
+    case "UTF-16BE":
+        if (endian == Endian.bigEndian)
+            return &recode_utf16;
+        else
+            return &recode_swap_utf16;
+
+    case "UTF-16":
+        return &recode_utf16;
+
+    default:
+        return null;
     }
 }
+
+uintptr_t recode_utf32(MoreDCharDg dg, dchar[] dest)
+{
+    uintptr_t ix = 0;
+    dchar[] source;
+    while (ix < dest.length)
+    {
+        if (source.length == 0)
+        {
+            if (!dg(ProvideDgWant.MORE_DATA,source))
+                return ix;
+            assert(source.length > 0);
+        }
+        dest[ix++] = source[0];
+        source = source[1..$];
+     }
+    dg(ProvideDgWant.UNUSED_DATA,source);
+    return ix;
+
+}
+
+RecodeDCharFn getRecodeDCharFn(string name)
+{
+    string upcase = name.toUpper();
+    switch(name)
+    {
+    case "UTF-32":
+    case "UTF-32BE":
+    case "UTF-32LE":
+        return &recode_utf32; //TODO: this must be wrong for some inputs
+    default:
+        return null;
+    }
+}
+
 
 /// append a dchar to UTF-8 string
 
@@ -578,42 +576,6 @@ void appendUTF8(ref char[] s, dchar d)
             s ~= c3;
             s ~= c4;
             return;
-        }
-    }
-}
-
-
-/// UTF-32 reader which is a straight read.
-template RecodeDChar(T)
-{
-    alias bool function(T, ref dchar)  RecodeFunc;
-
-    bool read_utf32(T rgd, ref dchar c)
-    {
-        static if(isDelegate!(T) || isFunctionPointer!(T))
-        {
-            if (!rgd(c))
-                return false;
-        }
-        else static if (isPullRange!(T))
-        {
-            if (!rgd.pull(c))
-                return false;
-        }
-        return true;
-    }
-
-    RecodeFunc getRecodeFunc(string name)
-    {
-        string upcase = name.toUpper();
-        switch(name)
-        {
-        case "UTF-32":
-        case "UTF-32BE":
-        case "UTF-32LE":
-            return &read_utf32; //TODO: this must be wrong for some.
-        default:
-            return null;
         }
     }
 }

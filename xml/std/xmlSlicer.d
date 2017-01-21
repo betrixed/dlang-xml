@@ -133,7 +133,7 @@ module xml.std.xmlSlicer;
 
 version (GC_STATS)
 {
-    import xml.util.gcstats;
+    import texi.gcstats;
 }
 
 enum cdata = "<![CDATA[";

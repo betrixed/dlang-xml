@@ -3,13 +3,16 @@ module xml.xmlParser;
 
 import std.stdio, std.stdint;
 import std.ascii, std.variant, std.string, std.conv, std.utf, std.traits;
+import texi.inputblock;
+
 import xml.xmlChar, xml.txml;
-import xml.xmlAttribute, xml.xmlError, xml.textInput, xml.util.read;
+import xml.xmlAttribute, xml.xmlError;
+import xml.util.filepath;
 import xml.dom.dtdt;
 import std.path, std.file, std.range;
 import std.format;
 import texi.read;
-import xml.util.gcstats;
+import texi.gcstats;
 import texi.buffer;
 import texi.bomstring;
 import texi.inputEncode;
@@ -52,7 +55,6 @@ class XmlParser(T)  {
 		bool				hasXmlVersion;
 		bool				hasStandalone;
 		bool				hasEncoding;
-		bool				slicing_; // current data source is immutable slice
 		bool				deviantData_; // sliced data run was broken
 		bool				inCharData;
 		bool				eventMode_; // results by events
@@ -81,31 +83,6 @@ class XmlParser(T)  {
 
 	alias void delegate() ParseStateDg;
 
-	static struct MarkSlice {
-		immutable(T)*	ptr_;
-		debug immutable(T)*	 		viewptr_;
-		uintptr_t		start_;
-		uintptr_t		end_;
-
-		void start(immutable(T)* p, uintptr_t pos)
-		{
-			ptr_ = p;
-			debug viewptr_ = p + pos;
-			start_ = pos;
-			end_ = 0;
-		}
-		void end(immutable(T)* p, uintptr_t pos)
-		{
-			assert(ptr_ == p && pos >= start_);
-			end_ = pos;
-		}
-		immutable(T)[] opSlice() const
-		{
-			assert((ptr_ !is null) && (start_ <= end_));
-			return ptr_[start_..end_];
-		}
-	}
-
 	static struct XmlContext
 	{
 		int					markupDepth;
@@ -118,12 +95,10 @@ class XmlParser(T)  {
 
 		double				docVersion_;
 
-		//Buffer!dchar		backStack;	 // oops wrong way buffer
-		dchar[]				backStack_;
+		dchar[]     		backStack_;
+
 		// a single block of unparsed xml
 		uintptr_t			mpos;		 // start char index of front for slicing
-		bool				slicing;	 // current context is sliceData_
-		immutable(T)[]		sliceData;		 // current input buffer
 		const(dchar)[]		streamData;	// dynamic stream data
 
 		MoreInputDg			inputDg_;		// more stream data
@@ -183,64 +158,29 @@ class XmlParser(T)  {
 
 		string getSourceContext()
 		{
-			if (slicing_)
-			{
-				auto backPos = sliceData_.length;
-				if (backPos > 0)
-				{
-					auto frontPos = (fpos > 20) ? fpos - 20 : 0;
-					if (backPos > fpos + 20)
-						backPos = fpos + 20;
-					return format("%s [ %s ] %s", sliceData_[frontPos..fpos], front, sliceData_[fpos..backPos]);
-				}
-
-			}
-			else {
-				auto backPos = streamData_.length;
-				if (backPos > 0)
-				{
-					auto frontPos = (fpos > 20) ? fpos - 20 : 0;
-					if (backPos > fpos + 20)
-						backPos = fpos + 20;
-					return format("%s [ %s ] %s", streamData_[frontPos..fpos], front, streamData_[fpos..backPos]);
-				}
-			}
+            auto backPos = streamData_.length;
+            if (backPos > 0)
+            {
+                auto frontPos = (fpos > 20) ? fpos - 20 : 0;
+                if (backPos > fpos + 20)
+                    backPos = fpos + 20;
+                return format("%s [ %s ] %s", streamData_[frontPos..fpos], front, streamData_[fpos..backPos]);
+            }
 			return "";
 		}
 		// handle finished XmlDataSoource
 		private bool sourceDone(XmlDataSource ds)
 		{
-			if (!slicing_)
-			{
-				streamData_ = null;
-				ds.explode();
-				inputDg_ = null;
-			}
+            destroy(source_);
 			return false;
 		}
-		class XmlDataSource {
-			const(T)[]  source_;
-			SliceBuffer!T	translator_;
-			ulong		pos_;
-
+		class XmlDataSource : RecodeInput {
+            T[] data;
 			this(const(T)[] src)
 			{
-				source_ = src;
-				translator_ = new SliceBuffer!T(src);
-			}
-
-			void explode()
-			{
-				delete translator_;
-				source_ = null;
-				pos_ = 0;
-			}
-
-			bool getData(ref const(dchar)[] buf)
-			{
-				if (translator_.fillData(buf,pos_))
-					return true;
-				return this.outer.sourceDone(this);
+                data = src.dup;
+                super();
+                this.setArray(data);
 			}
 		}
 		// unconditional stuff back
@@ -257,75 +197,11 @@ class XmlParser(T)  {
 		}
 		final void unpop(dchar makeFront)
 		{
-			if ((backStack.length > 0) || !slicing_)
+			if (backStack.length > 0)
 			{
 				// already stacked, regardless of source
 				if (!empty)
 					backStack ~= front;
-				front = makeFront;
-				empty = false;
-				return;
-			}
-			if (slicing_)
-			{
-				// Assume exact reverse with check for character
-
-				if (mpos > 0)
-				{
-					fpos = mpos;
-					static if (is(T==char)) {
-						while (true)
-						{
-							if (fpos == 0)
-								unpopMalfunction();
-							fpos--;
-							if ((sliceData_[fpos] & 0xC0) != 0x80)
-								break; // found a start character
-						}
-					}
-					else static if (is(T==wchar)) {
-						while (true)
-						{
-							if (fpos == 0)
-								unpopMalfunction();
-							fpos--;
-							dchar w16 = sliceData_[fpos];
-							if (w16 < 0xD800 || w16 >= 0xE000)
-								break; // as-is character
-							// its a surrogate pair, so needs to be two of them
-							if (fpos == 0)
-								unpopMalfunction();
-							fpos--;
-							w16 = sliceData_[fpos];
-							if (w16 >= 0xD800 && w16 < 0xE000)
-								break; // ready for decode
-							unpopMalfunction();
-						}
-					}
-					else static if (is(T==dchar)) {
-						if (fpos == 0)
-							unpopMalfunction();
-						fpos--;
-					}
-				}
-				else {
-					if (fpos == 0)
-						unpopMalfunction();
-					fpos = 0;
-				}
-				mpos = fpos;
-				// confirm
-				dchar test = decode(sliceData_,fpos);
-				assert(makeFront == test);
-				front = makeFront;
-				empty = false;
-				return;
-
-			} // working through dchar[]
-			else if (( fpos > 0) && (fpos <= streamData_.length) && (streamData_[fpos-1]==front))
-			{
-				fpos--;
-				mpos--;
 				front = makeFront;
 				empty = false;
 				return;
@@ -336,82 +212,27 @@ class XmlParser(T)  {
 			front = makeFront;
 			empty = false;
 			return;
-
 		}
 		final void popFront()
 		{
-			if (!empty)
-			{
-				auto bslen = backStack.length;
-				if (bslen > 0)
-				{
-					bslen--;
-					front = backStack[bslen];
-					backStack.length = bslen;
-					return;
-				}
-				if (slicing_)
-				{
-					if (fpos >= sliceData_.length)
-					{
-						if (inCharData) // bolognaise
-						{
-							mpos = sliceData_.length;
-							returnTextContent();
-						}
-						while(true)
-						{
-							if ((contextStack_.length > 0) && !this.scopePop)
-							{
-								sliceData_ = null;
-								popContext();
-								if (!empty)
-									return; // front was previously accounted for.
-								else
-									continue;
-							}
-							empty = true;
-							return;
-						}
-					}
-					mpos = fpos;
-					front = decode(sliceData_,fpos);
-				}
-				else {
-					if (fpos >= streamData_.length)
-					{
-						while (true)
-						{
-							if (inputDg_ && inputDg_(streamData_))
-							{
-								fpos = 0;
-								break;
-							}
-							else {
-								streamData_ = null;
-							}
+            if (backStack.length > 0)
+            {
+                front = backStack.back();
+                backStack.popBack();
+                return;
+            }
+            source_.popFront();
+            empty = source_.empty();
+            if (!empty)
+            {
+                front = source_.front;
+                if (doFilter_ != CharFilter.filterOn)
+                    lineChar_++;
+                else
+                    filterFront();
+            }
+            return;
 
-							if ((contextStack_.length > 0) && !this.scopePop)
-							{
-								popContext();
-								if (!empty)
-									return; // front was previously accounted for.
-								else
-									continue;
-							}
-							empty = true;
-							return;
-						}
-					}
-					front = streamData_[fpos++];
-				}
-
-				if (doFilter_ != CharFilter.filterOn)
-					lineChar_++;
-				else
-					filterFront();
-				return;
-			}
 		}
 		final void filterFront()
 		{
@@ -623,11 +444,8 @@ class XmlParser(T)  {
 		dchar				front = 0;
 		bool				empty  = true;
 
-		//Buffer!dchar		backStack;	 // oops wrong way buffer
-		dchar[]				backStack;
-		MarkSlice			marker_;
+		Buffer!dchar		backStack;	 // oops wrong way buffer
 		uintptr_t			mpos;
-		immutable(T)[]		sliceData_;		 // current input buffer
 
 		const(dchar)[]		streamData_;
 		MoreInputDg			inputDg_;
@@ -652,21 +470,12 @@ class XmlParser(T)  {
 		PState					state_;
 
 		string[]			systemPaths_;
-		//double				XMLVersion;
 		intptr_t			maxEdition;
 
 
 		immutable(T)[]			tag_;	// used by doStartTag
-		immutable(T)[]			attrName_;
-		immutable(T)[]			attrValue_;
 
-		//Buffer!T				bufNormAttr_;
-		//Buffer!T				bufAttr_;
-		//Buffer!T				bufTag_;
-		//Buffer!T				bufEndTag_;
-		//Buffer!T				bufMatch_;
-		//Buffer!T				bufContent_;
-		// Buffers
+		Attribute               attr_;
 
 		XmlBuffer 	bufNormAttr_, bufAttr_, bufTag_, bufEndTag_,bufMatch_, bufContent_;
 
@@ -681,32 +490,27 @@ class XmlParser(T)  {
 		intptr_t			itemCount;
 		uintptr_t			attributeCount;
 
-		// manage own primary source
-		ReadBuffer!(dchar)	fillSource_;
+		// primary source
+		RecodeInput	        source_;
+
 		ulong				fillPos_;
 		int					bomMark_;
-		// introduced for the DOCTYPE
-		//ImmuteAlloc!(T,true)	stringAlloc_;
 
-		bool fillData(ref const(dchar)[] data)
-		{
-			return fillSource_.fillData(data,fillPos_);
-		}
 
 		/// assign a dchar buffer filling primary source
-		public void fillSource(ReadBuffer!dchar src) @property
+		public void source(RecodeInput src) @property
 		{
-			fillSource_ = src;
-			initSource(&fillData);
+			source_ = src;
+			if (source_)
+			{
+                empty = source_.empty;
+                if (!empty)
+                {
+                    front = source_.front;
+                }
+			}
 		}
-		// read the data in a block, translate if necessary to T.
-		public void sliceFile(string srcPath)
-		{
-			auto s = readFileBom!T(srcPath,bomMark_);
-			auto xml = (cast(immutable(T)*) s.ptr)[0..s.length];
-			addSystemPath(normalizedDirName(srcPath));
-			initSource(xml);
-		}
+
 
 		// called from doXmlDeclaration
 		void setXmlVersion(double value)
@@ -809,10 +613,7 @@ class XmlParser(T)  {
 				return false;
 
 			frontFilterOff();
-			if (slicing_)
-			{
-				marker_.start(sliceData_.ptr,mpos);
-			}
+
 			/// Slicing fails on last character in slice and pop of context on empty
 			/// So have to buffer collect anyway
 			//bufTag_.length = 0;
@@ -832,16 +633,10 @@ class XmlParser(T)  {
 				else
 					break;
 			}
-			if (slicing_)
-			{
-				marker_.end(sliceData_.ptr,mpos);
-				tag = marker_[];
-			}
-			else {
-				//tag = bufTag_.idup;
-				tag = xmlt!T.data(bufTag_).idup;
-				//tag = bufTag_.data.idup;
-			}
+
+            tag = xmlt!T.data(bufTag_).idup;
+
+
 			frontFilterOn();
 			return true;
 		}
@@ -882,14 +677,7 @@ class XmlParser(T)  {
 			{
 				if (xmlt!T.length(bufAttr_) > 0)
 				{
-					if (slicing_ && !deviant)
-					{
-						marker_.end(sliceData_.ptr, mpos);
-						val = marker_[];
-					}
-					else {
-						val = xmlt!T.data(bufAttr_).idup;
-					}
+                    val = xmlt!T.data(bufAttr_).idup;
 				}
 				else
 					val = [];
@@ -907,11 +695,6 @@ class XmlParser(T)  {
 				enquote = 0x00; // avoid another kind of quote character
 			}
 
-
-			if (slicing_)
-			{
-				marker_.start(sliceData_.ptr, mpos);
-			}
 
 			//bufAttr_.length = 0;
 			//bufAttr_.shrinkTo(0);
@@ -1159,6 +942,7 @@ class XmlParser(T)  {
 								}
 								elementDepth++;
 								stateDg_ = &doContent;
+								source_.bufferSize(1024);
 								doStartTag();
 								return;
 							}
@@ -1200,11 +984,6 @@ class XmlParser(T)  {
 		final void parseComment()
 		{
 			dchar  test  = 0;
-			if (slicing_)
-			{
-				deviantData_ = false;
-				marker_.start(sliceData_.ptr, mpos);
-			}
 			//bufContent_.shrinkTo(0);
 			xmlt!T.reset(bufContent_);
 			frontFilterOn();
@@ -1217,8 +996,6 @@ class XmlParser(T)  {
 						break;
 					if (front=='-')
 					{
-						if (slicing_ && !deviantData_)
-							marker_.end(sliceData_.ptr,mpos-1);
 						popFront();
 						if (empty)
 							break;
@@ -1242,11 +1019,7 @@ class XmlParser(T)  {
 			with(results_)
 			{
 				eventId = SAX.COMMENT;
-				if (slicing_ && !deviantData_)
-					data = marker_[];
-				else
-					data = xmlt!T.data(bufContent_).idup;
-					//bufContent_.data.idup;
+                data = xmlt!T.data(bufContent_).idup;
 				attributes.reset();
 			}
 			if (eventMode_)
@@ -1313,7 +1086,7 @@ class XmlParser(T)  {
 
 			while(!matchInput("?>"))
 			{
-				if (!getXmlName(attrName_))
+				if (!getXmlName(attr_.name))
 				{
 					//throwNotWellFormed("declaration attribute expected");
 					// got a strange character?
@@ -1348,24 +1121,24 @@ class XmlParser(T)  {
 				if  (!spaceCt)
 					throw errors_.makeException("missing spaces");
 
-				getAttributeValue(attrValue_);
-				if (attrName_.length==0)
+				getAttributeValue(attr_.value);
+				if (attr_.name.length==0)
 					throw errors_.makeException("empty declaration value");
 
 				atcount += 1;
 
-				switch(attrName_)
+				switch(attr_.name)
 				{
 					case "version":
 						if (hasXmlVersion)
 						{
-							xmlDuplicate(attrName_);
+							xmlDuplicate(attr_.name);
 							break;
 						}
 						if (hasStandalone || hasEncoding)
 							xmlVersionFirst(true);
 						hasXmlVersion = true;
-						xmlStrValue = attrValue_;
+						xmlStrValue = attr_.value;
 						xml_value = doXmlVersion(xmlStrValue);
 						break;
 					case "encoding":
@@ -1375,10 +1148,10 @@ class XmlParser(T)  {
 							xmlStandaloneLast();
 						if (hasEncoding)
 						{
-							xmlDuplicate(attrName_);
+							xmlDuplicate(attr_.name);
 							break;
 						}
-						encodingValue = to!(immutable(T)[]) (attrValue_);
+						encodingValue = to!(immutable(T)[]) (attr_.value);
 						hasEncoding = true;
 						break;
 					case "standalone":
@@ -1388,14 +1161,14 @@ class XmlParser(T)  {
 							xmlVersionFirst();
 						if (hasStandalone)
 						{
-							xmlDuplicate(attrName_);
+							xmlDuplicate(attr_.name);
 							break;
 						}
-						standaloneValue = attrValue_;
+						standaloneValue = attr_.value;
 						hasStandalone = true;
 						break;
 					default:
-						throw errors_.makeException(format("unknown declaration attribute %s ", attrName_));
+						throw errors_.makeException(format("unknown declaration attribute %s ", attr_.name));
 						//break;
 				}
 				spaceCt = munchSpace();
@@ -1405,7 +1178,8 @@ class XmlParser(T)  {
 			if (hasXmlVersion)
 			{
 				setXmlVersion(xml_value);
-				attributes_.push(Attribute("version",xmlStrValue));
+
+				attributes_.append(Attribute("version",xmlStrValue));
 			}
 			markupDepth--;
 			if (isEntity && !hasEncoding)
@@ -1415,12 +1189,12 @@ class XmlParser(T)  {
 			if (hasEncoding)
 			{
 				setXmlEncoding(encodingValue);
-				attributes_.push(Attribute("encoding", encodingValue));
+				attributes_.append(Attribute("encoding", encodingValue));
 			}
 			if (hasStandalone)
 			{
 				setXmlStandalone(standaloneValue);
-				attributes_.push(Attribute("standalone", standaloneValue));
+				attributes_.append(Attribute("standalone", standaloneValue));
 			}
 			// send event
 			with(results_)
@@ -1463,8 +1237,8 @@ class XmlParser(T)  {
 				// encoding stuff in dchar ?
 				// errors_.setEncoding(encoding);
 				xmlEncoding_ = to!string(encoding);
-				if (fillSource_ !is null)
-					fillSource_.setEncoding(xmlEncoding_);
+				if (source_ !is null)
+					source_.setEncoding(xmlEncoding_);
 			}
 			catch (XmlError ex)
 			{
@@ -1491,7 +1265,6 @@ class XmlParser(T)  {
 				errors_.pushError(ex.toString(),XmlErrorLevel.FATAL);
 			}
 			errors_.checkErrorStatus();
-			//dataFiller_.setBufferSize(SRC_BUF_SIZE);
 		}
 		void setXmlStandalone(const(T)[] standalone)
 		{
@@ -1538,6 +1311,7 @@ class XmlParser(T)  {
 			int attSpaceCt = 0;
 			auto attrCount = 0;
 			attributes_.reset();
+
 
 			//auto prepareAttributes = (evt_.nameEvent.startTagDg_ !is null) || (evt_.nameEvent.soloTagDg_ !is null);
 			void setResults(SAX id)
@@ -1601,7 +1375,7 @@ class XmlParser(T)  {
 								popFront();
 								if (empty)
 									throw makeEmpty();
-								if (!getXmlName(attrName_) || (tag_ != attrName_))
+								if (!getXmlName(attr_.name) || (tag_ != attr_.name))
 									throw errors_.makeException(XmlErrorCode.ELEMENT_NESTING);
 								munchSpace(); // possible space after end tag name!
 								if (empty || (front != '>'))
@@ -1646,7 +1420,7 @@ class XmlParser(T)  {
 						{
 							throw errors_.makeException(XmlErrorCode.MISSING_SPACE);
 						}
-						if (!getXmlName(attrName_))
+						if (!getXmlName(attr_.name))
 						{
 							errors_.pushError(getXmlErrorMsg(XmlErrorCode.EXPECTED_ATTRIBUTE),XmlErrorLevel.INVALID);
 							throw errors_.makeException(badCharMsg(front));
@@ -1655,24 +1429,24 @@ class XmlParser(T)  {
 						if (attSpaceCt == 0)
 							throw errors_.makeException(XmlErrorCode.MISSING_SPACE);
 
-						getAttributeValue(attrValue_);
+						getAttributeValue(attr_.value);
 
-						if (attrValue_.length == 0)
+						if (attr_.value.length == 0)
 						{
 							if (isHTML_)
-								attrValue_ = attrName_;
+								attr_.value = attr_.name;
 						}
 						else if (normalizeAttributes_)
 						{
-							attributeNormalize(attrValue_);
+							attributeNormalize(attr_.value);
 
-							if (attrName_ == "xml:space")
+							if (attr_.name == "xml:space")
 							{
-								if (attrValue_ == "preserve")
+								if (attr_.value == "preserve")
 								{
 
 								}
-								else if (attrValue_ == "default")
+								else if (attr_.value == "default")
 								{
 
 								}
@@ -1683,7 +1457,7 @@ class XmlParser(T)  {
 							}
 							/// TODO: actually implement space instructions?
 						}
-						attributes_.push(Attribute(attrName_,attrValue_));
+						attributes_.push(attr_);
 
 						attrCount += 1;
 						break;
@@ -1699,15 +1473,9 @@ class XmlParser(T)  {
 			with(results_)
 			{
 				eventId = SAX.TEXT;
-				if (slicing_ && !deviantData_)
-				{
-					marker_.end(sliceData_.ptr, mpos);
-					data = marker_[];
-				}
-				else {
 					//data = bufContent_.data.idup;
-					data = xmlt!T.data(bufContent_).idup;
-				}
+                data = xmlt!T.data(bufContent_).idup;
+
 				attributes.reset();
 			}
 			if (eventMode_)
@@ -1850,11 +1618,6 @@ class XmlParser(T)  {
 					{
 						inCharData = true;
 						xmlt!T.reset(bufContent_);
-						if (slicing_)
-						{
-							marker_.start(sliceData_.ptr, mpos);
-							deviantData_ = false;
-						}
 					}
 					if (lastChar_)
 						deviantData_ = true;
@@ -1919,7 +1682,7 @@ class XmlParser(T)  {
 						goto default;
 					default:
 						if (getXmlName(bufTag_))
-							throw errors_.makeException(format("Epilog illegal %s",xmlt!T.data(bufTag_)),XmlErrorLevel.FATAL);
+							throw errors_.makeException(format("Epilog illegal '%s'",xmlt!T.data(bufTag_)),XmlErrorLevel.FATAL);
 						else
 							throw errors_.makeException("Epilog illegal " ~ badCharMsg(front));
 				}
@@ -1932,8 +1695,8 @@ class XmlParser(T)  {
 			}
 			state_ = PState.P_END;
 			stateDg_ = null;
-			if (fillSource_)
-				destroy(fillSource_);
+			if (source_)
+				destroy(source_);
 		}
 
 		/** got a <! and put it back */
@@ -1956,30 +1719,16 @@ class XmlParser(T)  {
 		final void doCDATAContent()
 		{
             xmlt!T.reset(bufContent_);
-			if (slicing_)
-			{
-				marker_.start(sliceData_.ptr, mpos);
-				deviantData_ = false;
-			}
 			frontFilterOn();
 			while(!empty)
 			{
 				if ((front == ']') && isCDataEnd())
 				{
-					if (slicing_ && !deviantData_)
-					{
-						marker_.end(sliceData_.ptr,mpos-3);
-					}
 					itemCount++;
 					with(results_)
 					{
 						eventId = SAX.CDATA;
-						if (slicing_ && !deviantData_)
-						{
-							data = marker_[];
-						}
-						else
-							data = xmlt!T.data(bufContent_).idup;
+                        data = xmlt!T.data(bufContent_).idup;
 						attributes.reset();
 					}
 					if (eventMode_)
@@ -1989,8 +1738,6 @@ class XmlParser(T)  {
 				}
 				else
 				{
-					if (slicing_ && lastChar_)
-						deviantData_ = true;
 					bufContent_ ~= front;
 					popFront();
 				}
@@ -2242,15 +1989,6 @@ class XmlParser(T)  {
 		return errors_;
 	}
 
-	final void initSource(immutable(T)[] src)
-	{
-		sliceData_ = src;
-		mpos = 0;
-		fpos = 0;
-		slicing_ = true;
-		empty = (sliceData_.length==0);
-		popFront();
-	}
 	final void initSource(MoreInputDg dg)
 	{
 		inputDg_ = dg;
@@ -2351,9 +2089,7 @@ class XmlParser(T)  {
 			empty = ctx_.empty;
 			docVersion_ = ctx_.docVersion_;
 			backStack = ctx_.backStack_;	 // oops wrong way buffer
-			sliceData_ = ctx_.sliceData;		 // current input buffer
 			streamData_ = ctx_.streamData;
-			slicing_ = ctx_.slicing;
 
 			fpos = ctx_.fpos;
 			entity = ctx_.entity;
@@ -2394,10 +2130,8 @@ class XmlParser(T)  {
 		ctx_.front = front;
 		ctx_.empty = empty;
 		ctx_.docVersion_ = docVersion_;
-		ctx_.backStack_ = backStack;
-		ctx_.sliceData = sliceData_;		 // current input buffer
+		ctx_.backStack_ = backStack.data;
 		ctx_.streamData = streamData_;
-		ctx_.slicing = slicing_;
 		ctx_.fpos = fpos;
 
 		ctx_.entity = entity;
@@ -2416,11 +2150,8 @@ class XmlParser(T)  {
 		lastChar_ = 0;
 		isEndOfLine_ = false;
 
-		fpos = 0;
-		mpos = 0;
 		streamData_ = null;
-		sliceData_ = null;
-		slicing_ = false;
+
 
         markupDepth = 0;
 		stackElementDepth += elementDepth;
@@ -2430,7 +2161,7 @@ class XmlParser(T)  {
 		docDeclare = 0;
 		// doFilter_ retains value
 		deviantData_ = true; // flag a context escape/loss
-		backStack = [];
+		backStack.reset();
 		empty = false;
 		// force new front
 
@@ -2439,8 +2170,7 @@ class XmlParser(T)  {
     void pushContext(immutable(T)[] data, bool inScope = true, EntityData edata = null)
 	{
 		pushContext();
-		sliceData_ = data;
-		slicing_ = true;
+		//sliceData_ = data;
 		entity = edata;
 		scopePop = inScope;
 
@@ -4433,14 +4163,15 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto sf = new XmlFileReader(File(uri,"r"));
+		auto sf = new RecodeInput();
+		sf.open(uri);
 		ulong	pos;
 
 		scope(exit)
 		{
 			destroy(ep);
 		}
-		ep.fillSource(sf);
+		ep.source = sf;
         ep.frontFilterOn();
 		ep.dtd_ = dtd_;
 		ep.isStandalone_ = false;
@@ -4506,7 +4237,9 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto sf = new XmlFileReader(File(uri,"r"));
+		auto sf = new RecodeInput();
+		sf.open(uri);
+
 		ulong	pos;
 
 		scope(exit)
@@ -4515,12 +4248,7 @@ class XmlParser(T)  {
 			destroy(ep);
 			destroy(sf);
 		}
-		bool getData(ref const(dchar)[] data)
-		{
-			return sf.fillData(data,pos);
-		}
 
-		ep.initSource(&getData);
         if (ep.matchInput("<?xml"))
         {
             ep.markupDepth++;

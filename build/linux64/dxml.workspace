@@ -3,11 +3,12 @@
 	<Workspace title="DXML">
 		<Project filename="speed/speed.cbp" />
 		<Project filename="bigload/bigload.cbp" />
-		<Project filename="conformance/conformance.cbp" />
 		<Project filename="extract/extract.cbp" />
 		<Project filename="../../examples/giss/clean2/clean2.cbp" />
 		<Project filename="../../examples/giss/get1/get1.cbp" />
 		<Project filename="../../examples/giss/merge/merge.cbp" />
 		<Project filename="../../examples/giss/hpberg/hpberg.cbp" />
+		<Project filename="../../examples/giss/v2tobin/v2tobin.cbp" />
+		<Project filename="../../examples/conform/conformance.cbp" />
 	</Workspace>
 </CodeBlocks_workspace_file>

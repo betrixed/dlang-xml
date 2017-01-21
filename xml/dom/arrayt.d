@@ -8,8 +8,8 @@ Authors: Michael Rynn
 module xml.dom.arrayt;
 
 
-import xml.util.buffer;
-import xml.util.print;
+import texi.buffer;
+import xml.xmlOutput;
 
 import std.string, std.conv, std.exception, std.stdio;
 import std.variant;
@@ -27,7 +27,6 @@ debug(VERBOSE)
 /// Base class Object string toString() may require translation.
 /// toXml()
 /// Elements, Attributes, nodes, have no parent or owner member.
-import xml.txml, xml.util.print;
 
 template XMLARRAY(T) {
 

@@ -3,6 +3,7 @@
 	<FileVersion major="1" minor="6" />
 	<Project>
 		<Option title="conformance" />
+		<Option execution_dir="/home/michael/dev/dlang-xml/build/linux64/conformance/" />
 		<Option pch_mode="2" />
 		<Option compiler="dmd" />
 		<Build>
@@ -29,27 +30,30 @@
 				</Compiler>
 			</Target>
 		</Build>
-		<Unit filename="../../../README.md" />
-		<Unit filename="../../../examples/conform/src/conform.d" />
-		<Unit filename="../../../examples/conform/src/testSuite.d" />
-		<Unit filename="../../../texi/bomstring.d" />
-		<Unit filename="../../../texi/buffer.d" />
-		<Unit filename="../../../texi/gcstats.d" />
-		<Unit filename="../../../texi/inputEncode.d" />
-		<Unit filename="../../../texi/inputblock.d" />
-		<Unit filename="../../../texi/read.d" />
-		<Unit filename="../../../xml/dom/domt.d" />
-		<Unit filename="../../../xml/dom/dtdt.d" />
-		<Unit filename="../../../xml/txml.d" />
-		<Unit filename="../../../xml/util/filepath.d" />
-		<Unit filename="../../../xml/util/jisx0208.d" />
-		<Unit filename="../../../xml/xmlArrayDom.d" />
-		<Unit filename="../../../xml/xmlAttribute.d" />
-		<Unit filename="../../../xml/xmlChar.d" />
-		<Unit filename="../../../xml/xmlError.d" />
-		<Unit filename="../../../xml/xmlLinkDom.d" />
-		<Unit filename="../../../xml/xmlOutput.d" />
-		<Unit filename="../../../xml/xmlParser.d" />
+		<Compiler>
+			<Add directory="src" />
+		</Compiler>
+		<Unit filename="../../README.md" />
+		<Unit filename="../../texi/bomstring.d" />
+		<Unit filename="../../texi/buffer.d" />
+		<Unit filename="../../texi/gcstats.d" />
+		<Unit filename="../../texi/inputEncode.d" />
+		<Unit filename="../../texi/inputblock.d" />
+		<Unit filename="../../texi/read.d" />
+		<Unit filename="../../xml/dom/domt.d" />
+		<Unit filename="../../xml/dom/dtdt.d" />
+		<Unit filename="../../xml/txml.d" />
+		<Unit filename="../../xml/util/filepath.d" />
+		<Unit filename="../../xml/util/jisx0208.d" />
+		<Unit filename="../../xml/xmlArrayDom.d" />
+		<Unit filename="../../xml/xmlAttribute.d" />
+		<Unit filename="../../xml/xmlChar.d" />
+		<Unit filename="../../xml/xmlError.d" />
+		<Unit filename="../../xml/xmlLinkDom.d" />
+		<Unit filename="../../xml/xmlOutput.d" />
+		<Unit filename="../../xml/xmlParser.d" />
+		<Unit filename="src/conform.d" />
+		<Unit filename="src/testSuite.d" />
 		<Extensions>
 			<envvars />
 			<code_completion />

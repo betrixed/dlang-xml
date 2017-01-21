@@ -8,16 +8,16 @@ Authors: Michael Rynn
 module xml.xmlArrayDom;
 
 import std.stdio;
-import xml.util.buffer;
+import texi.buffer;
+import texi.inputblock;
 import xml.txml;
-import xml.textInput;
 import xml.dom.dtdt;
 
 import std.string, std.conv, std.exception;
 import std.variant;
 version(GC_STATS)
 {
-	import xml.util.gcstats;
+	import texi.gcstats;
 }
 //debug = VERBOSE;
 debug(VERBOSE)
@@ -345,7 +345,7 @@ class Element :  Item
     {
         Buffer!XmlString app;
 
-        void addstr(const(T)[] s)
+        void addstr(in T[] s)
         {
             app.put(s.idup);
         }
@@ -362,7 +362,7 @@ class Element :  Item
     {
         Buffer!T result;
 
-        void addstr(const(T)[] s)
+        void addstr(in T[] s)
         {
             result.put(s);
         }
@@ -468,7 +468,7 @@ public:
     {
         Buffer!XmlString app;
 
-        void addstr(const(T)[] s)
+        void addstr(in T[] s)
         {
             app.put(s.idup);
         }
@@ -673,17 +673,12 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 
 	void setFile(string filename)
 	{
-		parser_.fillSource = new XmlFileReader(File(filename,"r"));
-	}
-    //
-	void setFileSlice(string filename)
-	{
-		parser_.sliceFile(filename);
+		parser_.source = RecodeInput.fromFile(filename);
 	}
 
-	void setSourceSlice(immutable(T)[] data)
+	void setSourceSlice(T[] data)
 	{
-		parser_.initSource(data);
+		parser_.source  = RecodeInput.fromArray(data);
 	}
 
 	void parseDocument()

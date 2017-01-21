@@ -1,9 +1,11 @@
 module xml.xmlLinkDom;
 
+import texi.inputblock;
 import xml.txml, xml.xmlParser;
 import xml.dom.domt;
-import xml.textInput, xml.xmlChar, xml.util.read;
+import xml.xmlChar;
 import xml.dom.dtdt, xml.xmlError;
+import xml.util.filepath;
 
 import std.file, std.path;
 
@@ -13,7 +15,7 @@ import std.stdio;
 
 version(GC_STATS)
 {
-    import xml.util.gcstats;
+    import texi.gcstats;
 }
 
 // build up a structure of used tag nesting
@@ -92,47 +94,25 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			ElementDef	def_;
 	}
 
+
 	void parseFile(Document d, string srcPath)
 	{
 		doc_ = d;
 		setFromDocument();
 		addSystemPath(normalizedDirName(srcPath));
-		auto sf = new XmlFileReader(File(srcPath,"r"));
-		parser_.fillSource = sf;
+		parser_.source = RecodeInput.fromFile(srcPath);
 		parser_.parseAll();
 	}
 
-	void parseInputDg(Document d, MoreInputDg dg)
-	{
-		doc_ = d;
-		setFromDocument();
-		parser_.initSource(dg);
-		parser_.parseAll();
-
-	}
 	/// parse a potentially different character type.
-	void parseNoSlice(S)(Document d, const(S)[] src)
+	void parseSlice(S)(Document d, S[] src)
 	{
 		doc_ = d;
 		setFromDocument();
-		parser_.fillSource(new SliceBuffer!S(src));
+		parser_.source(RecodeInput.fromArray(src));
 		parser_.parseAll();
 	}
-	void parseSlice(Document d, immutable(T)[] src)
-	{
-		doc_ = d;
-		setFromDocument();
-		parser_.initSource(src);
-		parser_.parseAll();
-	}
-	// read the data in a block, translate if necessary to T.
-	void parseSliceFile(Document d, string srcPath)
-	{
-		doc_ = d;
-		setFromDocument();
-		parser_.sliceFile(srcPath);
-		parser_.parseAll();
-	}
+
 
 	Document						doc_;
 	DocumentType					dtdNode_; // what the document keeps around
@@ -1560,7 +1540,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		return true;
 	}
 }
-void parseXml(T,S)(XMLDOM!T.Document doc, immutable(S)[] sxml, bool validate = true)
+
+/*
+void parseXml(T,S)(XMLDOM!T.Document doc, S[] sxml, bool validate = true)
 {
 	auto builder = new DXmlDomBuild!(T)();
 	scope(exit)
@@ -1568,14 +1550,7 @@ void parseXml(T,S)(XMLDOM!T.Document doc, immutable(S)[] sxml, bool validate = t
     builder.validate(validate);
 	builder.parseNoSlice!S(doc, sxml);
 }
-void parseXmlSlice(T)(XMLDOM!T.Document doc, immutable(T)[] sxml, bool validate = true)
-{
-	auto builder = new DXmlDomBuild!(T)();
-	scope(exit)
-        builder.explode();
-    builder.validate(validate);
-	builder.parseSlice(doc, sxml);
-}
+
 
 /// Append to DOM document from contents of xml file. Strings sliced from document if/where possible.
 void parseXmlSliceFile(T)(XMLDOM!T.Document doc, string srcpath, bool validate = true )
@@ -1587,6 +1562,16 @@ void parseXmlSliceFile(T)(XMLDOM!T.Document doc, string srcpath, bool validate =
 	builder.parseSliceFile(doc, srcpath);
 }
 /// Append to DOM document from contents of xml file. Text and element names created on the fly.
+*/
+
+void parseXmlSlice(T)(XMLDOM!T.Document doc, T[] sxml, bool validate = true)
+{
+	auto builder = new DXmlDomBuild!(T)();
+	scope(exit)
+        builder.explode();
+    builder.validate(validate);
+	builder.parseSlice(doc, sxml);
+}
 
 void parseXmlFile(T)(XMLDOM!T.Document doc, string srcpath, bool validate = true )
 {
@@ -1596,3 +1581,4 @@ void parseXmlFile(T)(XMLDOM!T.Document doc, string srcpath, bool validate = true
 	builder.validate(validate);
 	builder.parseFile(doc, srcpath);
 }
+

@@ -124,6 +124,19 @@ template XMLAttribute(T)
 				return attr_.peek;
 			}
 		}
+
+		int opApply(scope int delegate(ref XmlAttribute attr) dg)
+		{
+			int result = 0;
+			for (uintptr_t i = 0; i < attr_.length; i++)
+			{
+				result = dg(attr_[i]);
+				if (result != 0)
+					return result;
+			}
+			return result;
+		}
+
 		int opApply(scope int delegate(const XmlString , const XmlString) dg) const
 		{
 			uint ct = 0;
@@ -186,7 +199,13 @@ template XMLAttribute(T)
 			attr_ ~= XmlAttribute(n,v);
 			needSort_ = (attr_.length > 1);
 		}
-		void push(const XmlAttribute attrb)
+		// accepted arguments are different to push
+		void append(const XmlAttribute attrb)
+		{
+			attr_ ~= attrb;
+			needSort_ = (attr_.length > 1);			
+		}
+		void push(ref XmlAttribute attrb)
 		{
 			attr_ ~= attrb;
 			needSort_ = (attr_.length > 1);

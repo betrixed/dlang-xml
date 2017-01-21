@@ -26,7 +26,7 @@ alias SaxTpl.TagSpace	TagSpace;
 
 version(GC_STATS)
 {
-	import xml.util.gcstats;
+	import texi.gcstats;
 }
 
 string Example4 =

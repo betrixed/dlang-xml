@@ -546,15 +546,6 @@ struct Buffer(T)
             opCatAssign(buffer[i..$]);
         }
 
-        @property immutable(T)[]  freeze()
-        {
-            if (ptr_ is null)
-                return null;
-            auto result = (cast(immutable(T)*)ptr_)[0..length_];
-            ptr_ = null;
-            length_ = 0;
-            return result;
-        }
 		/// Take away internal buffer as if is its single immutable reference. This may change
 
         @property immutable(T)[] idup()
@@ -620,8 +611,6 @@ struct Buffer(T)
                 }
             }
         }
-
-
 
         void opCatAssign(dchar c)
         {
@@ -903,7 +892,7 @@ struct Buffer(T)
 		return (ptr_)[0..length_].dup;
 	}
 
-	T[] takeArray()
+	T[] moveArray()
 	{
 		if (ptr_ is null)
 			return null;
@@ -1104,9 +1093,12 @@ struct Buffer(T)
 		copy_create((ptr_) + origlen, buf, slen);
 		length_ = newlen;
 	}
-	void opCatAssign(const(T) data)
-	{
-		append(&data, 1);
+    static if (!is(T==dchar)) // already defined for dchar
+    {
+        void opCatAssign(const(T) data)
+        {
+            append(&data, 1);
+        }
 	}
 	void opCatAssign(const(T)[] data)
 	{

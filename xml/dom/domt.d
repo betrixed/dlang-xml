@@ -34,7 +34,7 @@ import xml.xmlError;
 
 
 version(GC_STATS) {
-	import xml.util.gcstats;
+	import texi.gcstats;
 }
 /// This modules exception class
 class DOMFail : Exception
@@ -114,7 +114,9 @@ public:
 
 template XMLDOM(T)
 {
-	alias immutable(T)[] XmlString;
+	alias xmlt!T.XmlString XmlString;
+	alias xmlt!T.StringPutDg StringPutDg;
+
 	alias XMLAttribute!T.AttributeMap	AttributeMap;
 	static if (is(T==char))
 		alias std.conv.text	 concats;
@@ -123,7 +125,6 @@ template XMLDOM(T)
 	else
 		alias std.conv.dtext concats;
 
-	alias void delegate(const(T)[] s)	StringPutDg;
 
 
 alias scope int delegate(Node n) NodeVisitFn;
@@ -499,7 +500,7 @@ public:
     }
 
     /// raw access
-    Node[] items()
+   Node[] items() @property
     {
         return items_;
     }
@@ -1199,7 +1200,7 @@ public:
         Buffer!XmlString app;
         ImmuteAlloc!T ialloc;
 
-        void addstr(const(T)[] s)
+        void addstr(in T[] s)
         {
             app.put(ialloc.alloc(s));
         }
@@ -1233,7 +1234,8 @@ public:
 		unlink();
 		super.explode();
 	}
-    package Element getRootElement()
+	// public, because only forces a work around if package
+    public Element getRootElement()
     {
         return rootElement_;
     }
@@ -1408,7 +1410,7 @@ class NamedNodeMap
 
 private:
     NodeCompareFn	cmp_;
-    Node[]		items_;
+    Node[]		    items_;
     bool			sorted_;
 public:
 
@@ -1432,6 +1434,10 @@ public:
         return items_.length;
     }
 
+    const(Node)[] items() @property const
+    {
+        return items_;
+    }
     /// method
     final Node getNamedItem(XmlString name)
     {
@@ -1552,6 +1558,7 @@ public:
             sortMe();
         return items_[ix];
     }
+
 
     final Node opIndex(const(T)[] name)
     {
@@ -2198,6 +2205,15 @@ public:
         return (attributes_ is null) ? false
                : (attributes_.getNamedItemNS(uri, local) !is null);
     }
+
+    /// [] notation for getAttribute
+    XmlString opIndex(XmlString name)
+    {
+         if (attributes_ is null)
+            return null;
+        Node n = attributes_.getNamedItem(name);
+        return ( n is null) ? null : (cast(Attr)n).getValue();
+    }
     /// Return string value for the named attribute.
     XmlString getAttribute(XmlString name)
     {
@@ -2207,7 +2223,21 @@ public:
         Node n = attributes_.getNamedItem(name);
         return ( n is null) ? null : (cast(Attr)n).getValue();
     }
-    /// method to be fixed
+    int opApply(scope int delegate(Attr a) dg)
+    {
+        int result = 0;
+        if (attributes_ !is null)
+        {
+            auto list = attributes_.items;
+            for(int i = 0; i < list.length; i++)
+            {
+                result = dg(cast(Attr) list[i]);
+                if (result != 0)
+                    return result;
+            }
+        }
+        return result;
+    }
     XmlString getAttributeNS(XmlString uri, XmlString local)
     {
         if (attributes_ is null)
@@ -2215,7 +2245,7 @@ public:
         Node n = attributes_.getNamedItemNS(uri, local);
         return ( n is null) ? null :(cast(Attr)n).getValue();
     }
-    /// to be fixed
+
     Attr getAttributeNodeNS(XmlString uri, XmlString local)
     {
         if (attributes_ is null)

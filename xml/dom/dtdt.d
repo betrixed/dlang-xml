@@ -9,7 +9,7 @@ import std.ascii;
 import std.string;
 
 version(GC_STATS)
-	import xml.util.gcstats;
+	import texi.gcstats;
 
 enum ChildSelect
 {

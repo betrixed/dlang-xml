@@ -33,7 +33,7 @@ import xml.xmlAttribute;
 import std.ascii;
 import std.format;
 version(GC_STATS)
-	import xml.util.gcstats;
+	import texi.gcstats;
 
 enum CharFilter
 {
@@ -120,6 +120,7 @@ enum AttributeType
 
 template xmlt(T) {
 	alias immutable(T)[] XmlString;
+    alias void delegate(in T[]) StringPutDg;
 
 	static const XmlString xmlNamespaceURI = "http://www.w3.org/XML/1998/namespace";
 	static const XmlString xmlnsURI = "http://www.w3.org/2000/xmlns/";

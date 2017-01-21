@@ -1,7 +1,14 @@
 module texi.read;
 
+import texi.buffer;
+
 import std.stdint;
 import std.utf;
+import std.stdio;
+import std.range.interfaces;
+//import std.range;
+import core.exception;
+
 static import std.ascii;
 /**
 Read only character array range, output dchar.
@@ -40,8 +47,6 @@ public:
         data_ = s;
         readyFront();
 	}
-
-
 	void popFront()
 	{
 		if (data_.length > next_)
@@ -69,11 +74,112 @@ public:
     {
         return data_;
     }
-
-
 }
 
 
+class  InputArray(T) : InputRange!dchar
+{
+protected:
+    const(T)[]  data_;
+    uintptr_t   next_;
+    dchar       front_;
+
+    void readyFront()
+    {
+        if (data_.length > 0)
+        {
+            static if (is(T == dchar))
+            {
+                front_ = data_[0];
+                next_ = 1;
+            }
+            else {
+                next_ = 0;
+                auto dataref = data_;
+                front_ = decode(dataref, next_);
+            }
+        }
+    }
+
+public:
+    this(const(T)[] s)
+    {
+        assign(s);
+    }
+    void assign(const(T)[] s)
+    {
+        data_ = s;
+        readyFront();
+    }
+    void popFront()
+    {
+        if (data_.length > next_)
+        {
+            data_ = data[next_..$];
+            readyFront();
+        }
+        else {
+            // TODO: throw Exception
+            front_ = 0x00;
+            data_ = [];
+        }
+
+    }
+    dchar moveFront()
+    {
+        dchar result = front;
+        popFront();
+        return result;
+    }
+    bool empty() @property
+    {
+        return (data_.length == 0);
+    }
+
+    dchar front() @property
+    {
+        return front_;
+    }
+    const(T)[] data() @property
+    {
+        return data_;
+    }
+
+    int opApply(scope int delegate(dchar) dg)
+    {
+        int result = 0;
+        while (!empty)
+        {
+            result = dg(front);
+            popFront(); // 1 pop per call
+            if (result != 0)
+                return result;
+        }
+        return result;
+    }
+    int opApply(scope int delegate(uintptr_t, dchar) dg)
+    {
+        int result = 0;
+        uintptr_t ct = 0;
+        while (!empty)
+        {
+            result = dg(ct,front);
+            popFront(); // one pop per call
+            if (result != 0)
+                return result;
+            ct++;
+        }
+        return result;
+    }
+}
+
+/**
+ParseInputRange
+    Wrap interface InputRange!dchar
+    Has a pushFront stack.
+    front, empty are direct properties.
+    popFront checks pushFront stack
+*/
 /// number class returned by parseNumber
 enum NumberClass
 {
@@ -82,6 +188,306 @@ enum NumberClass
     NUM_INTEGER,
     NUM_REAL
 };
+
+/** ParseInputRange is not a strict input range, inherits no interface */
+class ParseInputRange
+{
+public:
+    dchar               front;
+    bool                empty;
+protected:
+    Buffer!dchar	    stack_;
+    InputRange!dchar    input_;
+public:
+
+    this(InputRange!dchar ir)
+    {
+        input_ = ir;
+        popFront(); // get the status
+    }
+
+
+    void pushFront(dchar c)
+    {
+        if (!empty)
+            stack_.put(front);
+        else
+            empty = false;
+        front = c;
+
+    }
+    /// push a bunch of UTF32 characters in front of everything else, in reverse.
+    void pushFront(const(dchar)[] s)
+    {
+        if (s.length == 0)
+            return;
+        if (!empty)
+            stack_.put(front);
+        else
+            empty = false;
+        auto slen = s.length;
+        while (slen-- > 1)
+            stack_.put(s[slen]);
+        front = s[0];
+    }
+
+    void popFront()
+    {
+        if (stack_.length > 0)
+        {
+            front = stack_.back();
+			stack_.popBack();
+            return;
+        }
+        input_.popFront();
+        empty = input_.empty;
+        if (!empty)
+            front = input_.front;
+
+    }
+
+    dchar moveFront()
+    {
+        dchar result = front;
+        popFront();
+        return result;
+    }
+// includes linefeed, tab, carriage return
+    int getSpaceCt(dchar* lastSpace = null)
+    {
+        int   count = 0;
+        dchar space = 0x00;
+        while(!empty)
+        {
+            switch(front)
+            {
+                case 0x20:
+                case 0x0A:
+                case 0x09:
+                case 0x0D:
+                    space = front;
+                    count++;
+                    popFront();
+                    break;
+                default:
+                    if (lastSpace)
+                        *lastSpace = space;
+                    return count;
+            }
+        }
+        return 0;
+    }
+
+    bool stopAfterChar(dchar c)
+    {
+        while(!empty)
+        {
+            if (front == c)
+            {
+                popFront();
+                return true;
+            }
+            popFront();
+        }
+        return false;
+    }
+
+    alias bool delegate(dchar c) CharTestDg;
+    // return if f(dchar) returns true
+    bool stopAfterTest(CharTestDg f)
+    {
+        while(!empty)
+        {
+            if (f(front))
+            {
+                popFront();
+                return true;
+            }
+            popFront();
+        }
+        return false;
+    }
+    bool readToken(W) (dchar stopChar, auto ref W wr)
+    {
+        bool hit = false;
+    SCAN_LOOP:
+        for(;;)
+        {
+            if (empty)
+                break;
+            if (front == stopChar)
+                break SCAN_LOOP;
+            wr.put(front);
+            popFront();
+            hit = true;
+        }
+        return hit;
+    }
+
+    uintptr_t readLine(T)(ref Buffer!T w, dchar eolChar = '\n')
+    {
+        w.reset();
+        while(!empty)
+        {
+            auto test = front;
+            if (test == eolChar)
+                break;
+            w ~= test;
+            popFront();
+        }
+        return w.length;
+    }
+    bool readToken(W) (dstring sepSet, auto ref W wr)
+    {
+        bool hit = false;
+    SCAN_LOOP:
+        for(;;)
+        {
+            if (empty)
+                break;
+            auto test = this.front;
+            foreach(dchar sep ; sepSet)
+                if (front == sep)
+                    break SCAN_LOOP;
+                wr.put(test);
+                popFront();
+                hit = true;
+        }
+        return hit;
+    }
+    NumberClass
+    parseNumber(W)(auto ref W wr,  int recurse = 0 )
+    {
+        int   digitct = 0;
+        bool  done =  empty;
+        bool  decPoint = false;
+        for(;;)
+        {
+            if (done)
+                break;
+            auto test = front;
+            switch(test)
+            {
+                case '-':
+                case '+':
+                    if (digitct > 0)
+                    {
+                        done = true;
+                    }
+                    break;
+                case '.':
+                    if (!decPoint)
+                        decPoint = true;
+                    else
+                        done = true;
+                    break;
+                default:
+                    if (!std.ascii.isDigit(test))
+                    {
+                        done = true;
+                        if (test == 'e' || test == 'E')
+                        {
+                            // Ambiguous end of number, or exponent?
+                            if (recurse == 0)
+                            {
+                                popFront(); // pop the test character
+                                Buffer!dchar tempWr;
+
+                                if (parseNumber(tempWr, recurse+1)==NumberClass.NUM_INTEGER)
+                                {
+                                    wr.put(test);
+                                    wr ~= tempWr.data;
+                                    return NumberClass.NUM_REAL; // TODO: if no decimal point, and exponent is +ve, then could also be integer
+                                }
+                                else {
+                                    // TODO: unit is this really OK? Might be a good place for exception
+                                    // Got stuff we shouldn't have
+                                    pushFront(tempWr.data);
+                                    pushFront(test);
+                                }
+                            }
+                            // assume end of number
+                        }
+                    }
+                    else
+                        digitct++;
+                    break;
+            }
+            if (done)
+                break;
+            wr ~= test;
+            popFront();
+            done = this.empty;
+        }
+        if (decPoint)
+            return NumberClass.NUM_REAL;
+        if (digitct == 0)
+            return NumberClass.NUM_EMPTY;
+        return NumberClass.NUM_INTEGER;
+    }
+    bool unquote(W)(ref W w)
+    {
+        if (empty)
+            return false;
+        if ((front=='\"')||(front=='\''))
+        {
+            dchar endQuote = front;
+            popFront();
+            while(!empty)
+            {
+                if (front==endQuote)
+                {
+                    popFront();
+                    return true;
+                }
+                else {
+                    w ~= front;
+                    popFront();
+                }
+            }
+        }
+        return false;
+    }
+
+    bool match(T)(const(T)[] s)
+    {
+        if(s.length == 0 || empty)
+            return false;
+
+        auto ir = ReadRange!T(s);
+        Buffer!dchar tempStack_;
+
+        while(!empty && !ir.empty)
+        {
+            if (ir.front() != front)
+            {
+                // not goint to match, push stuff back
+                if (tempStack_.length > 0)
+                {
+                    pushFront(tempStack_.data);
+                }
+                return false;
+            }
+            else {
+                tempStack_ ~= front;
+            }
+            ir.popFront();
+            popFront();
+        }
+        return ir.empty;
+    }
+
+    bool match(dchar c)
+    {
+        if (front != c)
+            return false;
+
+        popFront();
+        return true;
+    }
+}
+
+
 
 /**
 Parse regular decimal number strings.
@@ -301,372 +707,6 @@ bool isNumber(NumberClass nc)
     return (nc == NumberClass.NUM_INTEGER) || (nc == NumberClass.NUM_REAL);
 }
 
-/**
-    Abstract class template of ReadBuffer
-*/
-class ReadBuffer(T)
-{
-protected:
-    bool eof_; // Just had LAST FILL!
-public:
-
-	this()
-	{
-		eof_ = true;
-	}
-
-    @property bool isEOF()
-    {
-        return eof_;
-    }
-    bool setEncoding(string encoding)
-    {
-        return false;
-    }
-    bool setBufferSize(uint bsize)
-    {
-        return false;
-    }
-    bool fillData(ref const(T)[] buffer, ref ulong sourceRef)
-    {
-        return false;
-    }
-}
-
-
-class FileReadBuffer(T) :  ReadBuffer!(T)
-{
-	version (GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
-
-
-    File  s_; //
-    ubyte[] data_; // raw buffer
-
-    enum { INTERNAL_BUF = 4096 / T.sizeof }
-
-
-    override bool fillData(ref const(T)[] fillme, ref ulong refPos)
-    {
-        if (data_ is null)
-        {
-            data_ = new ubyte[INTERNAL_BUF];
-        }
-        refPos = s_.tell() / T.sizeof; // reference in character units
-
-        auto didRead = s_.rawRead(data_);
-        if (didRead.length > 0)
-        {
-            fillme = (cast(T*) data_.ptr)[0..didRead.length / T.sizeof];
-            return true;
-        }
-        return false;
-    }
-
-    this(string filename)
-    {
-        this(File(filename,"r"));
-    }
-    this(File ins)
-    {
-        super();
-        s_ = ins;
-        eof_ = false;
-		version(GC_STATS)
-			gcStatsSum.inc();
-    }
-
-	~this()
-	{
-		version(GC_STATS)
-			gcStatsSum.dec();
-	}
-}
-
-class InputCharRange(T)
-{
-    /// Delegate to refill the buffer with data,
-    alias ReadBuffer!(T)	DataFiller;
-    /// Delegate to notify when empty becomes true.
-    alias void delegate() EmptyNotify;
-
-	version (GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
-
-    protected
-    {
-		T[]					stack_; // push back
-        //Buffer!(T[])		stack_; // push back
-        bool				empty_;
-        T					front_;
-
-        const(T)[]			str_;  // alias of a buffer to be filled by a delegate
-        size_t				nextpos_; // index into string
-
-        DataFiller	        df_; // buffer filler
-        EmptyNotify			onEmpty_;
-        ulong				srcRef_;  // original source reference, if any
-
-        /// push stack character without changing value of front_
-        void pushInternalStack(T c)
-        {
-            stack_ ~= c;
-        }
-    }
-
-    /// return empty property of InputRange
-    @property
-    public const final bool empty()
-    {
-        return empty_;
-    }
-
-    /// return front property of f
-    @property
-    public const final T front()
-    {
-        return front_;
-    }
-    protected
-    {
-        bool FetchMoreData(bool firstPop = false)
-        in {
-            assert(nextpos_ >= str_.length,"FetchMoreData buffer not empty");
-        }
-        body {
-            if (df_ is null || df_.isEOF())
-                return false;
-            if (df_.fillData(str_, srcRef_) && str_.length > 0)
-            {
-                empty_ = false;
-                // popFront call is bad, since this was likely called from a popFront.
-                // however, if this is the very first character, called from pumpStart
-                // then have to simulate popFront.
-                if (firstPop)
-                    popFront();
-                else
-                {
-                    front_ = str_[0];
-                    nextpos_ = 1;
-                }
-                return true;
-            }
-            return false;
-        }
-    }
-public:
-	this()
-	{
-		empty_ = true;
-		version(GC_STATS)
-			gcStatsSum.inc();
-	}
-
-	~this()
-	{
-		version(GC_STATS)
-			gcStatsSum.dec();
-	}
-
-    /// notifyEmpty read property
-    @property EmptyNotify notifyEmpty()
-    {
-        return onEmpty_;
-    }
-    /// notifyEmpty write property
-    @property void notifyEmpty(EmptyNotify notify)
-    {
-        onEmpty_ = notify;
-    }
-    /// indicate position of datastream in original source
-    @property final ulong sourceReference()
-    {
-        return srcRef_ + nextpos_;
-    }
-
-    /// Number of bytes per array item
-    @property final uint sourceUnit()
-    {
-        return T.sizeof;
-    }
-
-    // subtract this from sourceReference to get the position of the buffer start
-    @property final auto sourceOffset()
-    {
-        return nextpos_;
-    }
-
-	void entireText(const(T)[] data)
-	{
-		arraySource(data);
-		pumpStart();
-	}
-    /// After setting this, require call to pumpStart
-    void arraySource(const(T)[] data)
-    {
-        str_ = data;
-        empty_ = true;
-        srcRef_ = 0;
-        nextpos_ = 0;
-    }
-
-    /// After setting this, require call to pumpStart
-    @property void dataSource(DataFiller df)
-    {
-        df_ = df;
-        empty_ = true;
-        srcRef_ = 0;
-        nextpos_ = 0;
-    }
-
-    /**
-    	Only does anything if empty is already set to true, which
-    	can be from setting the dataSource property. It will only then reset empty,
-    	and try to prime the input with a popFront.
-    	Returns !empty.
-    */
-
-    bool pumpStart()
-    {
-        if (!empty_)
-            return true;
-
-        if (df_ !is null)
-        {
-            empty_ = !FetchMoreData(true);
-        }
-        else
-        {
-            empty_ = (str_.length == 0);
-            nextpos_ = 0;
-            if (!empty)
-                popFront();
-        }
-        return !empty_;
-    }
 
 
 
-    /// Push a single character in front of input stream
-    final void pushFront(T c)
-    {
-        if (!empty_)
-        {
-            stack_ ~= front;
-        }
-        front_ = c;
-        empty_ = false;
-    }
-    /// push a bunch of characters back in front of stream
-    final void pushFront(const(T)[] s)
-    {
-        if (s.length == 0)
-            return;
-
-        if (!empty_)
-        {
-            // normal case
-            stack_ ~= front_;
-        }
-        auto slen = s.length;
-        while (slen-- > 1)
-            stack_ ~= s[slen];
-        front_ = s[0];
-        empty_ = false;
-    }
-
-    /// push a bunch of characters back in front of stream
-	final void convertPushFront(U : U[])(const(U)[] s)
-    if (!is(typeof(U) == typeof(T)))
-    {
-        pushFront(to!(const(T)[])(s));
-    }
-
-    /** InputRange method to bring the next character to front.
-    	Checks internal stack first, and if empty uses primary buffer.
-    */
-    void popFront()
-    {
-        if (empty_)
-            throw new RangeError("popFront when empty",__LINE__);
-		auto slen = stack_.length;
-        if (slen > 0)
-        {
-			slen--;
-            front_ = stack_[slen];
-			stack_.length = slen;
-            return;
-        }
-        if (nextpos_ < str_.length)
-        {
-            front_ = str_[nextpos_++];
-        }
-        else
-        {
-            empty_ = !FetchMoreData();
-            if (empty_)
-            {
-                front_ = 0;
-                if (onEmpty_)
-                    onEmpty_();
-            }
-        }
-    }
-    /// Return the front character if not empty, no state change
-    final const bool peek(ref T next)
-    {
-        if (!empty_)
-        {
-            next = front_;
-            return true;
-        }
-        return false;
-    }
-    /// Return the front character if not empty, and call popFront
-    final bool pull(ref T next)
-    {
-        if (!empty_)
-        {
-            next = front_;
-            popFront();
-            return true;
-        }
-        return false;
-    }
-    /** Change the number of characters returned at a time.
-        It may or may not take effect only after refill.
-    	For xml documents a small buffer size is used until the encoding
-    	has been established.
-    */
-    final bool setBufferSize(uint bsize)
-    {
-        if (df_ !is null)
-            return df_.setBufferSize(bsize);
-        else
-            return false;
-    }
-    /** Change the character encoding of the underlying datastream.
-    	It may or may not take effect only after refill.
-    */
-
-    final bool setEncoding(string encoding)
-    {
-        if (df_ !is null)
-            return df_.setEncoding(encoding);
-        else
-            return false;
-    }
-
-}

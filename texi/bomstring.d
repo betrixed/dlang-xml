@@ -274,66 +274,60 @@ FileBOM stripBOM(ref ubyte[] data)
 	return lastMatch;
 }
 
-immutable(T)[] toArray(T)(wchar[] wc)
+T[] toArray(T)(wchar[] wc)
 {
 
 	static if (is(T==wchar))
 	{
-        immutable(T)[] result = (cast(immutable(T)*) wc.ptr)[0..wc.length];
-		return result;
+		return wc;
 	}
 	static if (is(T==dchar))
 	{
-		size_t dpos = 0;
-		dchar[] dstr = new dchar[wc.length];
-		decode_wchar(wc,dstr,dpos);
-		dstr.length = dpos;
-		return (cast(immutable(dchar)*) dstr.ptr)[0..dstr.length];
+		Buffer!dchar stuff = wc;
+		return stuff.moveArray();
 	}
 	static if (is(T==char))
 	{
 		Buffer!char stuff = wc;
-		return stuff.freeze();
+		return stuff.moveArray();
 	}
 }
-immutable(T)[] toArray(T)(dchar[] dc)
+T[] toArray(T)(dchar[] dc)
 {
 	static if (is(T==dchar))
 	{
-	    auto result =  (cast(immutable(dchar)*) dc.ptr)[0..dc.length];
-		return result;
+		return dc;
 	}
 	static if (is(T==wchar))
 	{
 		Buffer!wchar stuff = dc;
-		return stuff.freeze();
+		return stuff.moveArray();
 	}
 	static if (is(T==char))
 	{
 		Buffer!char stuff = dc;
-		return stuff.freeze();
+		return stuff.moveArray();
 	}
 }
-immutable(T)[] toArray(T)(const(char)[] c)
+T[] toArray(T)(char[] c)
 {
 	static if (is(T==char))
 	{
-	    auto result =  (cast(immutable(char)*) c.ptr)[0..c.length];
-		return result;
+		return c;
 	}
 	static if (is(T==wchar))
 	{
 		Buffer!wchar stuff =  c;
-		return stuff.freeze();
+		return stuff.moveArray();
 	}
 	static if (is(T==dchar))
 	{
 		Buffer!dchar stuff =  c;
-		return stuff.freeze();
+		return stuff.moveArray();
 	}
 }
 /// Using character type indicator, Read entire file as UTF string, wstring or dstring, return BOM enum or -1 if UTF8 default
-immutable(T)[]
+T[]
 readFileBom(T)(string filename, ref int bomMark)
 {
     bomMark = -1;

@@ -1,4 +1,4 @@
-module xml.util.gcstats;
+module texi.gcstats;
 
 /**
 	Mixin to be added. Assumes no other default constructor, and not added at other places in inheritance.

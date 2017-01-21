@@ -1,17 +1,17 @@
 module testSuite;
 
-import xml.util.buffer;
-import xml.dom.domt, xml.util.read, xml.txml;
+import texi.buffer,  texi.read;
+import xml.dom.domt,xml.txml;
 import xml.xmlError, xml.xmlParser, xml.xmlLinkDom;
-import xml.util.inputEncode;
-import xml.textInput;
+import texi.inputEncode;
+import texi.inputblock;
 
 import std.stdint, std.path, std.stdio;
 import std.algorithm;
 
 version(GC_STATS)
 {
-	import xml.util.gcstats;
+	import texi.gcstats;
 }
 import std.file, std.conv, std.variant, std.string;
 template XMLTESTS(T)
@@ -147,7 +147,7 @@ template XMLTESTS(T)
 			//	dirName = rel2abs(dirName);
 			try
 			{
-				parseXmlSliceFile(doc,path,true);
+				parseXmlFile(doc,path,true);
 			}
 			catch(XmlError pe)
 			{
@@ -522,7 +522,7 @@ template XMLTESTS(T)
 				writeln("t.uri ", t.uri);
 			if (t.uri.endsWith("pr-xml-euc-jp.xml") || t.uri.endsWith("weekly-euc-jp.xml"))
 			{
-				auto c8p = RecodeChar!(CharIR).getRecodeFunc("euc-jp");
+				auto c8p = getRecodeCharFn("euc-jp");
 				if (c8p !is null)
 				{
 					t.test_type = "valid";
@@ -618,7 +618,7 @@ template XMLTESTS(T)
 			// output the document canonically, compare with Conformance suite output document.
 			Buffer!char app;
 
-			void output(const(T)[] s)
+			void output(in T[] s)
 			{
 				app.put(s);
 			}

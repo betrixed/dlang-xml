@@ -1,76 +1,91 @@
 module xml.util.jisx0208;
 
-import xml.util.inputEncode;
+import texi.read;
+import texi.inputEncode;
+
+import std.stdint;
 import std.traits, std.string;
 
 /// EUC-JP   - shift encoded JIS
 	///http://unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS/JIS0208.TXT
-/// Big translation tables and code taken from $XFree86: xc/lib/X11/lcUniConv/jisx0208.h,v 1.6 2003/05/27 22:26:31 
-template EUC_JP(T)
+/// Big translation tables and code taken from $XFree86: xc/lib/X11/lcUniConv/jisx0208.h,v 1.6 2003/05/27 22:26:31
+
+
+void register_EUC_JP()
 {
-	static void register(string codeName)
-	{
-		RecodeChar!(T).register(codeName,&recode_euc_jp);
-	}
-	
-	bool recode_euc_jp(T rgc, ref dchar c)
-	{
-		char d8;
-		
-		static if(isDelegate!(T) || isFunctionPointer!(T))
-		{
-			if (!rgc(d8))
-				return false; // empty is ok
-		}
-		else static if (isPullRange!(T))  {
-			if (!rgc.pull(d8))
-				return false; // empty is ok			
-		}
-		if (d8 < 0x80)
-		{
-			c = d8;
-			return true; 
-		}
-		ubyte hicode =  d8 & 0x7F;
-		static if(isDelegate!(T) || isFunctionPointer!(T))
-		{
-			if (!rgc(d8))
-				breakInSequence(); 
-		}
-		else static if (isPullRange!(T)) {
-			if (!rgc.pull(d8))
-				breakInSequence();		
-		}
-		ubyte locode = d8 & 0x7F;
-		
-		// then there is a big translation table
-		// $XFree86: xc/lib/X11/lcUniConv/jisx0208.h,v 1.6 2003/05/27 22:26:31 tsi 
-		if ((hicode >= 0x21 && hicode <= 0x28) || (hicode >= 0x30 && hicode <= 0x74))
-		{
-			if (locode >= 0x21 && locode < 0x7f)
-			{
-				size_t  ix = 94 * (hicode - 0x21) + (locode - 0x21);
-				ushort wc = 0xfffd;
-				if (ix < 1410) 
-				{
-					if (ix < 690)
-						wc = jisx0208_2uni_page21[ix];
-				} 
-				else {
-					if (ix < 7808)
-						wc = jisx0208_2uni_page30[ix-1410];
-				}
-				if (wc != 0xfffd) 
-				{
-					c = wc;
-					return true;
-				}
-				throw new CharSequenceError(format("JIS invalid character hi %x lo %x", hicode, locode));
-			}
-		}
-		throw new CharSequenceError(format("JIS index out of range hi %x lo %x", hicode, locode));
-	}
-	
+    register_CharFn("EUC-JP", &recode_euc_jp);
+}
+
+uintptr_t recode_euc_jp(MoreCharDg dg, dchar[] dest)
+{
+    char[] src;
+
+    bool refill()
+    {
+        if (src is null)
+            return dg(ProvideDgWant.INIT_DATA, src);
+        else
+            return dg(ProvideDgWant.MORE_DATA, src);
+    }
+
+    uintptr_t ix = 0;
+    while(ix < dest.length)
+    {
+        if (src.length == 0)
+        {
+            if (!refill())
+                return ix;
+        }
+        auto d8 = src[0];
+        src = src[1..$];
+
+        if (d8 < 0x80)
+        {
+            dest[ix++] = d8;
+            continue;
+        }
+
+        if (src.length == 0)
+        {
+            if (!refill())
+                return ix;
+        }
+        d8 = src[0];
+        src = src[1..$];
+
+        ubyte hicode =  d8 & 0x7F;
+        ubyte locode = d8 & 0x7F;
+
+    // then there is a big translation table
+    // $XFree86: xc/lib/X11/lcUniConv/jisx0208.h,v 1.6 2003/05/27 22:26:31 tsi
+        if ((hicode >= 0x21 && hicode <= 0x28) || (hicode >= 0x30 && hicode <= 0x74))
+        {
+            if (locode >= 0x21 && locode < 0x7f)
+            {
+                uintptr_t  tup = 94 * (hicode - 0x21) + (locode - 0x21);
+                ushort wc = 0xfffd;
+                if (tup < 1410)
+                {
+                    if (tup < 690)
+                        wc = jisx0208_2uni_page21[tup];
+                }
+                else {
+                    if (tup < 7808)
+                        wc = jisx0208_2uni_page30[tup-1410];
+                }
+                if (wc != 0xfffd)
+                {
+                    dest[ix++] = wc;
+                    continue;
+                }
+                throw new CharSequenceError(format("JIS invalid character hi %x lo %x", hicode, locode));
+            }
+        }
+        throw new CharSequenceError(format("JIS index out of range hi %x lo %x", hicode, locode));
+    }
+    // ran out of destination space
+    dg(ProvideDgWant.UNUSED_DATA, src);
+    return ix;
 }
 
 const ushort[690] jisx0208_2uni_page21 = [

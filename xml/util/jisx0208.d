@@ -44,6 +44,7 @@ uintptr_t recode_euc_jp(MoreCharDg dg, dchar[] dest)
             dest[ix++] = d8;
             continue;
         }
+        ubyte hicode =  d8 & 0x7F;
 
         if (src.length == 0)
         {
@@ -53,7 +54,7 @@ uintptr_t recode_euc_jp(MoreCharDg dg, dchar[] dest)
         d8 = src[0];
         src = src[1..$];
 
-        ubyte hicode =  d8 & 0x7F;
+
         ubyte locode = d8 & 0x7F;
 
     // then there is a big translation table
@@ -84,7 +85,7 @@ uintptr_t recode_euc_jp(MoreCharDg dg, dchar[] dest)
         throw new CharSequenceError(format("JIS index out of range hi %x lo %x", hicode, locode));
     }
     // ran out of destination space
-    dg(ProvideDgWant.UNUSED_DATA, src);
+    dg(ProvideDgWant.DONE_DATA, src);
     return ix;
 }
 

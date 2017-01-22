@@ -12,11 +12,13 @@ SAX xml event Template delegates to get call backs on Xml Parse events
 
 
 import texi.gcstats;
-import xml.txml;
-import xml.xmlParser;
-import xml.textInput;
 import texi.inputEncode;
 import texi.buffer;
+import texi.inputblock;
+
+import xml.txml;
+import xml.xmlParser;
+
 
 import std.variant, std.stdint;
 
@@ -296,27 +298,16 @@ public:
 	{
 		parser_.isHtml(val);
 	}
-	void setupNormalize(immutable(T)[] xml)
+	void setupNormalize(T[] xml)
 	{
 		parser_.setParameter(xmlAttributeNormalize,Variant(true));
-		parser_.initSource(xml);
+		parser_.source(RecodeInput.fromArray(xml));
 	}
-	void setupRaw(immutable(T)[] xml)
+	void setupRaw(T[] xml)
 	{
 		parser_.setParameter(xmlAttributeNormalize,Variant(false));
 		parser_.setParameter(xmlCharFilter,Variant(false));
-		parser_.initSource(xml);
-	}
-	void setupNoSlice(S)(immutable(S)[] xml)
-	{
-		auto sf = new SliceBuffer!S(xml);
-		ulong pos = 0;
-		bool getData(ref const(dchar)[] data)
-		{
-			return sf.fillData(data,pos);
-		}
-		parser_.setParameter(xmlAttributeNormalize,Variant(true));
-		parser_.initSource(&getData);
+		parser_.source(RecodeInput.fromArray(xml));
 	}
 
 	~this()

@@ -2,7 +2,8 @@ module xml.xmlParser;
 
 
 import std.stdio, std.stdint;
-import std.ascii, std.variant, std.string, std.conv, std.utf, std.traits;
+import std.utf;
+import std.ascii, std.variant, std.string, std.conv, std.traits;
 import texi.inputblock;
 
 import xml.xmlChar, xml.txml;
@@ -55,7 +56,6 @@ class XmlParser(T)  {
 		bool				hasXmlVersion;
 		bool				hasStandalone;
 		bool				hasEncoding;
-		bool				deviantData_; // sliced data run was broken
 		bool				inCharData;
 		bool				eventMode_; // results by events
 
@@ -95,13 +95,11 @@ class XmlParser(T)  {
 
 		double				docVersion_;
 
-		dchar[]     		backStack_;
+		dchar[]     			backStack_;
 
 		// a single block of unparsed xml
-		uintptr_t			mpos;		 // start char index of front for slicing
-		const(dchar)[]		streamData;	// dynamic stream data
 
-		MoreInputDg			inputDg_;		// more stream data
+		RecodeInput		recodeInput_;
 		uintptr_t			fpos;		 // position in buffer
 		EntityData			entity;
 		bool				scopePop;
@@ -158,16 +156,8 @@ class XmlParser(T)  {
 
 		string getSourceContext()
 		{
-            auto backPos = streamData_.length;
-            if (backPos > 0)
-            {
-                auto frontPos = (fpos > 20) ? fpos - 20 : 0;
-                if (backPos > fpos + 20)
-                    backPos = fpos + 20;
-                return format("%s [ %s ] %s", streamData_[frontPos..fpos], front, streamData_[fpos..backPos]);
-            }
-			return "";
-		}
+            return text("Line ", lineNumber_+1, " Col ", lineChar_+1, " " ,source_.shortContext());
+ 		}
 		// handle finished XmlDataSoource
 		private bool sourceDone(XmlDataSource ds)
 		{
@@ -187,8 +177,14 @@ class XmlParser(T)  {
 		private void pushBack(dchar c)
 		{
 			if (!empty)
+			{
+                // front is assumed a duplicate of source_.front,
+                // so really ought to popFront on source_.front
+                // otherwise 2 copies will be present
+                //source_.popFront();
 				backStack ~= front;
-			front = c;
+            }
+			front = c; // invalidates source_.front == front
 			empty = false;
 		}
 		private void unpopMalfunction()
@@ -202,13 +198,17 @@ class XmlParser(T)  {
 				// already stacked, regardless of source
 				if (!empty)
 					backStack ~= front;
-				front = makeFront;
+ 				front = makeFront;
 				empty = false;
 				return;
 			}
 			// out of matching front space
 			if (!empty)
+			{
 				backStack ~= front;
+                //source_.popFront();
+            }
+
 			front = makeFront;
 			empty = false;
 			return;
@@ -217,20 +217,31 @@ class XmlParser(T)  {
 		{
             if (backStack.length > 0)
             {
+                empty = false;
                 front = backStack.back();
                 backStack.popBack();
                 return;
             }
             source_.popFront();
-            empty = source_.empty();
-            if (!empty)
+            while(source_.empty)
             {
-                front = source_.front;
-                if (doFilter_ != CharFilter.filterOn)
-                    lineChar_++;
-                else
-                    filterFront();
+                if ((contextStack_.length > 0) && !this.scopePop)
+                {
+                    popContext();
+                    if (!empty)
+                        return; // front already processed
+                    else
+                        continue;
+                }
+                empty = true;
+                return;
             }
+            front = source_.front;
+            if (doFilter_ != CharFilter.filterOn)
+                lineChar_++;
+            else
+                filterFront();
+
             return;
 
 		}
@@ -445,11 +456,7 @@ class XmlParser(T)  {
 		bool				empty  = true;
 
 		Buffer!dchar		backStack;	 // oops wrong way buffer
-		uintptr_t			mpos;
 
-		const(dchar)[]		streamData_;
-		MoreInputDg			inputDg_;
-		uintptr_t			fpos;
 		EntityData			entity;
 		bool				scopePop;
 
@@ -680,7 +687,7 @@ class XmlParser(T)  {
                     val = xmlt!T.data(bufAttr_).idup;
 				}
 				else
-					val = [];
+					val = null;
 			}
 
 
@@ -1260,6 +1267,10 @@ class XmlParser(T)  {
 						errors_.pushError(ex.toString(),XmlErrorLevel.FATAL);
 				}
 			}
+			catch(InputBlockError ex)
+			{
+                errors_.pushError(ex.toString(),cast(XmlErrorLevel) ex.level);
+			}
 			catch(Exception ex)
 			{
 				errors_.pushError(ex.toString(),XmlErrorLevel.FATAL);
@@ -1484,7 +1495,6 @@ class XmlParser(T)  {
             xmlt!T.reset(bufContent_);
 			//bufContent_.shrinkTo(0);
 			inCharData = false;
-			deviantData_ = false;
 			return;
 		}
 
@@ -1564,11 +1574,6 @@ class XmlParser(T)  {
 				}
 				else if (front=='&')
 				{
-					if(!deviantData_)
-					{
-						deviantData_ = true;
-						//returnTextContent();
-					}
 					// Cannot determine content in advance. Invalidates content so far, ? return text so far?
 					popFront();
 					if (!empty)
@@ -1619,8 +1624,6 @@ class XmlParser(T)  {
 						inCharData = true;
 						xmlt!T.reset(bufContent_);
 					}
-					if (lastChar_)
-						deviantData_ = true;
 					bufContent_ ~= front;
 					final switch(bbct)
 					{
@@ -1989,12 +1992,6 @@ class XmlParser(T)  {
 		return errors_;
 	}
 
-	final void initSource(MoreInputDg dg)
-	{
-		inputDg_ = dg;
-		empty = false;
-		popFront();
-	}
 
 	final string stageString()
 	{
@@ -2020,6 +2017,7 @@ class XmlParser(T)  {
 	{
 		XmlError e = new XmlError(msg, level);
 		e.addMsg(format("In parse of %s",stageString()));
+		e.addMsg(text("Source ", getSourceContext()));
 		return errors_.preThrow(e);
 	}
 
@@ -2079,19 +2077,11 @@ class XmlParser(T)  {
 				stackElementDepth -= elementDepth;
 			}
 
-			inputDg_ = ctx_.inputDg_;
-
-
-			mpos = ctx_.mpos;
-			deviantData_ = true; // flag a context escape/loss
-
 			front = ctx_.front;
 			empty = ctx_.empty;
 			docVersion_ = ctx_.docVersion_;
-			backStack = ctx_.backStack_;	 // oops wrong way buffer
-			streamData_ = ctx_.streamData;
-
-			fpos = ctx_.fpos;
+			backStack = ctx_.backStack_;	 // assign dchar[]
+			source_ = ctx_.recodeInput_;
 			entity = ctx_.entity;
 			scopePop = ctx_.scopePop;
 			lineNumber_ = ctx_.lineNumber_;
@@ -2125,15 +2115,13 @@ class XmlParser(T)  {
 		ctx_.squareDepth = squareDepth;
 		ctx_.parenDepth = parenDepth;
 		ctx_.docDeclare = docDeclare;
-		ctx_.inputDg_ = inputDg_;
-		ctx_.mpos = mpos;
 		ctx_.front = front;
 		ctx_.empty = empty;
+		ctx_.recodeInput_ = source_;
 		ctx_.docVersion_ = docVersion_;
-		ctx_.backStack_ = backStack.data;
-		ctx_.streamData = streamData_;
-		ctx_.fpos = fpos;
-
+		// if backStack_ is Buffer then stash it then forget current
+		ctx_.backStack_ = backStack.moveData();
+		backStack.forget();
 		ctx_.entity = entity;
 		ctx_.scopePop = scopePop;
 		ctx_.lineNumber_ = lineNumber_;
@@ -2150,34 +2138,48 @@ class XmlParser(T)  {
 		lastChar_ = 0;
 		isEndOfLine_ = false;
 
-		streamData_ = null;
-
-
         markupDepth = 0;
-		stackElementDepth += elementDepth;
+        stackElementDepth += elementDepth;
         elementDepth = 0;
         squareDepth = 0;
         parenDepth = 0;
 		docDeclare = 0;
 		// doFilter_ retains value
-		deviantData_ = true; // flag a context escape/loss
 		backStack.reset();
 		empty = false;
 		// force new front
 
 	}
-
+/**
+	void sourceEmptyNotify(bool inPop)
+	{
+        popContext();
+        if (inPop && (backStack_.length > 0))
+            source_.popFront(); // the higher stack source had nothing to pop
+	}
+**/
     void pushContext(immutable(T)[] data, bool inScope = true, EntityData edata = null)
 	{
 		pushContext();
-		//sliceData_ = data;
+
+		source_ = RecodeInput.fromNative(data);
+
 		entity = edata;
 		scopePop = inScope;
-
+		/**
+        if (!scopePop)
+        {
+            source_.notifyEmpty = &sourceEmptyNotify;
+        }
+        **/
 		if (inScope || edata !is null)
-            filterAlwaysOff();
+            		filterAlwaysOff();
+        if (!source_.empty)
+        {
+            front = source_.front();
+            empty = false;
+        }
 
-		popFront();
 	}
 
     bool pushEntity(const(T)[] ename, bool isAttribute)
@@ -4237,8 +4239,8 @@ class XmlParser(T)  {
 		}
 
 		auto ep = prepChildParser();
-		auto sf = new RecodeInput();
-		sf.open(uri);
+
+		ep.source = RecodeInput.fromFile(uri);
 
 		ulong	pos;
 
@@ -4246,7 +4248,6 @@ class XmlParser(T)  {
 		{
 			ep.explode();
 			destroy(ep);
-			destroy(sf);
 		}
 
         if (ep.matchInput("<?xml"))
@@ -4634,6 +4635,7 @@ class XmlParser(T)  {
                     {
                         if (!addDefaultValue(adef))
                             throw errors_.makeException("Parse value failed");
+
                         enddef = true;
                     }
                     else

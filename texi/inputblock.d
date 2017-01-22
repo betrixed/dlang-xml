@@ -3,15 +3,38 @@ module texi.inputblock;
 import std.stdint;
 import std.stdio;
 import std.range.interfaces;
+import std.traits;
+import std.path;
+import std.conv;
 import texi.bomstring;
 import texi.gcstats;
 import texi.inputEncode;
 import texi.buffer;
-
+import std.utf;
+import std.uni;
 
 /**
     FileInputBlock(T) : read  next block of T from a file, or fixed buffer
 */
+   enum IBLevel {
+        ERROR = 2,
+        FATAL = 3
+    };
+
+
+class InputBlockError : Exception {
+public:
+    IBLevel  level_;
+	this(string msg, IBLevel level = IBLevel.ERROR )
+	{
+        level_ = level;
+        super(msg);
+    }
+    IBLevel level() @property const
+    {
+        return level_;
+    }
+};
 
 interface DCharProvider  {
     dchar[] transfer(dchar[] fillMe);
@@ -50,32 +73,32 @@ class InputBlock(T) : DCharProvider
         const auto defaultEncode = &recode_utf32;
     }
 
-    bool getMoreSource(ProvideDgWant wants, ref T[] data)
+    bool getMoreSource(ProvideDgWant wants, ref T[] srcdata)
     {
         final switch(wants)
         {
         case ProvideDgWant.INIT_DATA:
             if ((actual_.length > 0) || fillData())
             {
-                data = actual_;
+                srcdata = actual_;
                 return true;
             }
-            data_ = null;
+            srcdata = null;
             return false;
         case ProvideDgWant.MORE_DATA:
-            actual_ = data;
+            actual_ = srcdata;
             if (fillData())
             {
-                data_ = actual_;
+                srcdata = actual_;
                 return true;
             }
-            data_ = null;
+            srcdata = null;
             return false;
-        case ProvideDgWant.UNUSED_DATA:
-            actual_ = data;
+        case ProvideDgWant.DONE_DATA:
+            actual_ = srcdata;
             return true;
         case ProvideDgWant.DATA_ERROR:
-            return true;
+            return true; // cause throw exception
         }
     }
 
@@ -173,17 +196,82 @@ class InputBlock(T) : DCharProvider
     ByteOrderMark bom_;
 }
 
+/**
+Immutable inputs are hard to mix with non-immutable.
+Assume recoding requirement is native UTF only,
+and only dummy  file , bom, and setEncoding support.
+
+*/
+
+class InputNative(T) : DCharProvider {
+public:
+    this(const(T)[] data)
+    {
+        original_ = data;
+        actual_ = data;
+    }
+    dchar[] transfer(dchar[] fillMe)
+    {
+        uintptr_t ix = 0;
+        uintptr_t next = 0;
+        while ( (next < actual_.length) && (ix < fillMe.length))
+        {
+            fillMe[ix++] = decode(actual_, next);
+        }
+        fillMe.length = ix;
+        if (next < actual_.length)
+            actual_ = actual_[next..$];
+        else
+            actual_ = null;
+        return fillMe;
+    }
+    bool    setEncoding(string encoding)
+    {
+        return true;
+    }
+    bool    setBom(ByteOrderMark bom)
+    {
+        return true;
+    }
+    bool    setFile(File s)
+    {
+        return true;
+    }
+
+private:
+    const(T)[]  original_;
+    const(T)[]  actual_;
+
+}
+
 class RecodeInput : InputRange!dchar
 {
+	version (GC_STATS)
+	{
+		mixin GC_statistics;
+		static this()
+		{
+			setStatsId(typeid(typeof(this)).toString());
+		}
+	}
 
     alias RecodeInput   SelfType;
+    alias void delegate(bool) InputEmptyDg;
 
+    /* InputEmptyDg notifyEmpty_;
+
+    void notifyEmpty(InputEmptyDg ndg)
+    {
+        notifyEmpty_ = ndg;
+    }
+    **/
     void open(string f)
     {
         ubyte[] spill;
         bool  isEOF;
 
-        fileName_ = f;
+        fileName_ = buildNormalizedPath(absolutePath(f));
+
         s_ = File(fileName_,"r");
         bom_ = readBOM(s_, spill, isEOF);
         if (isEOF)
@@ -223,8 +311,22 @@ class RecodeInput : InputRange!dchar
     this()
     {
         newBufferSize_ = 4;
+  		version(GC_STATS)
+			gcStatsSum.inc();
     }
+    ~this()
+    {
+ 		version(GC_STATS)
+			gcStatsSum.dec();
 
+    }
+    static SelfType fromNative(T)(const(T)[] src)
+    {
+       auto result = new RecodeInput();
+       result.setNative(src);
+       return result;
+
+    }
     static SelfType fromArray(T)(T[] src)
     {
         auto result = new RecodeInput();
@@ -239,6 +341,12 @@ class RecodeInput : InputRange!dchar
         return result;
     }
 
+    void setNative(T)(const(T)[] src)
+    {
+        auto input = new InputNative!T(src);
+        filler_ = input;
+        popFront();
+    }
     void setArray(T)(T[] src)
     {
         auto input = new InputBlock!T;
@@ -315,14 +423,36 @@ class RecodeInput : InputRange!dchar
     {
         newBufferSize_ = chars;
     }
+
+    string shortContext()
+    {
+        auto ctx = src_[0..$];
+        if (ctx.length > 40)
+        {
+            ctx.length = 40;
+        }
+        return text(ctx);
+    }
     bool setEncoding(string encoding)
     {
+        string bomKey = toUpper(encoding);
+        if (bom_ !is null)
+        {
+            if( bom_.key.codeName == bomKey)
+                return true;
+            auto bother = ByteOrderRegistry.findBOM(bomKey);
+            if ((bother !is null) &&  (bother.charSize != bom_.charSize))
+                throw new InputBlockError(text("Incompatible encoding ", encoding),IBLevel.FATAL);
+        }
         if (filler_.setEncoding(encoding))
         {
             newBufferSize_ = 1024;
             return true;
         }
-        return false;
+        else {
+
+            throw new InputBlockError(text("Encoding '", encoding, "' is not supported"));
+        }
     }
     uintptr_t       frontPos_;
     uintptr_t       newBufferSize_;

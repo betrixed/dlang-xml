@@ -14,7 +14,7 @@ import xml.xmlOutput;
 import std.string, std.conv, std.exception, std.stdio;
 import std.variant;
 version(GC_STATS)
-import util.gcstats;
+import texi.gcstats;
 
 //debug = VERBOSE;
 debug(VERBOSE)

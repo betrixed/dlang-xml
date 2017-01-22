@@ -3221,25 +3221,27 @@ AttributeMap toAttributeMap(Element e)
 	struct ChildElementRange
 	{
 	private:
-		Node		node_;
+		Element		parent_;
 		Element		e_;
 
-		void nextElement()
+		Element nextElement(Node n)
 		{
-			while(node_ !is null)
+			while(n !is null)
 			{
-				e_ = cast(Element) node_;
-				node_ = node_.getNextSibling();
-				if (e_ !is null)
-					return;
+ 				auto test = cast(Element) n;
+                if (test !is null)
+                {
+                    return test;
+                }
+                n = n.getNextSibling();
 			}
-			e_ = null;
+			return null;
 		}
 	public:
 		this(Element parent)
 		{
-			node_ = parent.getFirstChild();
-			nextElement();
+			parent_ = parent;
+			e_ = nextElement(parent_.getFirstChild());
 		}
 
 		@property bool empty()
@@ -3254,9 +3256,94 @@ AttributeMap toAttributeMap(Element e)
 
 		void popFront()
 		{
-			nextElement();
+			e_ = nextElement(e_.getNextSibling());
 		}
+
+        int opApply(scope int delegate(Element) dg)
+        {
+            int result = 0;
+            while (!empty)
+            {
+                result = dg(front);
+                popFront(); // 1 pop per call
+                if (result != 0)
+                    return result;
+            }
+            return result;
+        }
+        int opApply(scope int delegate(uintptr_t, Element) dg)
+        {
+            int result = 0;
+            uintptr_t ct = 0;
+            while (!empty)
+            {
+                result = dg(ct,front);
+                popFront(); // one pop per call
+                if (result != 0)
+                    return result;
+                ct++;
+            }
+            return result;
+        }
+
 	}
+    struct ChildNodeRange
+	{
+	private:
+		Node		node_;
+		Element		parent_;
+	public:
+		this(Element parent)
+		{
+            parent_ = parent;
+			node_ = parent.getFirstChild();
+		}
+
+		@property bool empty()
+		{
+			return node_ is null;
+		}
+
+		@property Node front()
+		{
+			return node_;
+		}
+
+		void popFront()
+		{
+			if(node_ !is null)
+			{
+				node_ = node_.getNextSibling();
+			}
+		}
+
+        int opApply(scope int delegate(Node) dg)
+        {
+            int result = 0;
+            while (!empty)
+            {
+                result = dg(front);
+                popFront(); // 1 pop per call
+                if (result != 0)
+                    return result;
+            }
+            return result;
+        }
+        int opApply(scope int delegate(uintptr_t, Node) dg)
+        {
+            int result = 0;
+            uintptr_t ct = 0;
+            while (!empty)
+            {
+                result = dg(ct,front);
+                popFront(); // one pop per call
+                if (result != 0)
+                    return result;
+                ct++;
+            }
+            return result;
+        }
+    }
 	struct DOMVisitor
 	{
 

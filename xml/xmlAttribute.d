@@ -137,13 +137,12 @@ template XMLAttribute(T)
 			return result;
 		}
 
-		int opApply(scope int delegate(const XmlString , const XmlString) dg) const
+		int opApply(scope int delegate( XmlString ,  XmlString) dg)
 		{
 			uint ct = 0;
-			auto items = peek();
 			for(uintptr_t k = 0; k < attr_.length; k++)
 			{
-			    const XmlAttribute* r = &items[k];
+			    XmlAttribute* r = &attr_[k];
 				auto result = dg(r.name, r.value);
 				if (result)
 					return result;
@@ -203,7 +202,7 @@ template XMLAttribute(T)
 		void append(const XmlAttribute attrb)
 		{
 			attr_ ~= attrb;
-			needSort_ = (attr_.length > 1);			
+			needSort_ = (attr_.length > 1);
 		}
 		void push(ref XmlAttribute attrb)
 		{

@@ -892,7 +892,7 @@ struct Buffer(T)
 		return (ptr_)[0..length_].dup;
 	}
 
-	T[] moveArray()
+	T[] moveData()
 	{
 		if (ptr_ is null)
 			return null;

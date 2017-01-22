@@ -134,7 +134,7 @@ int TestType(T)(string[] args)
 				oix++;
 				if (oix < args.length)
 				{
-					tests.testsXmlFile = args[oix];
+					tests.testsXmlFile = buildNormalizedPath(absolutePath(args[oix]));
 				}
 				break;
 			default:
@@ -164,10 +164,7 @@ int main(string[] args)
 	{
 		GC.collect();
 		GCStatsSum.AllStats();
-		getchar();
 	}
-
-	getchar();
 	return result;
 
 

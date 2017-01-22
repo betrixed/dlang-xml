@@ -8,7 +8,7 @@ import xml.dom.dtdt, xml.xmlError;
 import xml.util.filepath;
 
 import std.file, std.path;
-
+import std.string;
 import std.string, std.stdint;
 import std.conv, std.algorithm, std.variant, std.array;
 import std.stdio;
@@ -340,21 +340,22 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
     {
         // A namespace definition <id> exists if there is a xmlns:<id>="URI" in the tree root.
         // for each attribute, check if the name is a namespace specification
-
-        NamedNodeMap amap = elem.getAttributes();
-        if (amap is null)
-            return;
-
         AttrNS rdef;			// attribute which defines a namespace
         AttrNS* pdef;
 
         // attributes which are not namespace declarations
         AttrNS[]     alist;
+        AttrNS nsa;
         XmlString prefix;
         XmlString nsURI;
         XmlString localName;
         XmlString atname;
 		bool      onPrefix;
+
+        NamedNodeMap amap = elem.getAttributes();
+        if (amap is null)
+            return;
+
 
         auto app = appender(alist);
 
@@ -369,7 +370,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         // divide the attributes into those that specify namespaces, and those that do not.
         foreach(a ; amap)
         {
-            AttrNS nsa = cast(AttrNS) a;
+            nsa = cast(AttrNS) a;
             atname = nsa.getName();
 
             checkSplitName(atname, prefix, localName);
@@ -393,9 +394,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 }
 
                 bool bind = true;
-                nsURI = nsa.getValue();
+                nsURI =  nsa.getValue();
                 localName = nsa.getLocalName();
-                if (nsURI.length == 0) // its an unbinding
+                if (nsURI is null || nsURI.length == 0) // its an unbinding
                 {
                     if (localName.length > 0)
                     {
@@ -426,6 +427,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 else
                 {
                     // A bit of validation for the URI / IRI
+                    writeln("--", nsURI, "--");
                     if (xml_version > 1.0)
                     {
                         if (!isNameSpaceIRI(nsURI))
@@ -502,9 +504,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         {
             return format("No namespace for attribute %s",ans.getName());
         }
-        foreach(nsa ; alist)
+        foreach(attr ; alist)
         {
-            prefix = nsa.getPrefix();
+            prefix = attr.getPrefix();
             needNS = true;
             if (nsSet_ !is null)
             {
@@ -515,7 +517,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 
                     if (rdef.getValue() is null)
                         pushError(format("Namespace %s is unbound",prefix),XmlErrorLevel.ERROR);
-                    nsa.setURI(rdef.getValue());
+                    attr.setURI(rdef.getValue());
                     needNS = false;
                 }
             }
@@ -808,17 +810,21 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		//debug(VERBOSE) { writeln("end ", currentTag_); }
 	}
 
+	const XmlString emptyAttrValue = "";
 	void dtdAttributeNormalize(AttributeDef adef, XmlString oldValue, ref XmlString result, AttributeType useType, bool reqExternal)
     {
         XmlBuffer resultBuf;
 		bool replace = false;
+		if (oldValue.length > 0)
 		{
 			parser_.pushContext(oldValue, true, null);
 			scope(exit)
 				parser_.popContext();
 			replace = parser_.attributeTextReplace(resultBuf, 0);
+			result = (replace) ? xmlt!T.data(resultBuf).idup : oldValue;
 		}
-		result = (replace) ? xmlt!T.data(resultBuf).idup : oldValue;
+		else
+            result = emptyAttrValue;
         XmlString[] valueset;
         uint vct = 0;
         bool doValidate = parser_.validate();

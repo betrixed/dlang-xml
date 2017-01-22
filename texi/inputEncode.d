@@ -122,7 +122,7 @@ enum ProvideDgWant {
     // save array reference to unused data
 
     MORE_DATA = 1,
-    UNUSED_DATA = 2,
+    DONE_DATA = 2,
 
     /* invalid character, and unused data.
        Return true to throw invalidChar exception, false to abort */
@@ -225,7 +225,7 @@ recode_utf8(MoreCharDg dg, dchar[] dest)
         dest[ix++] = d32;
     }
     // allow save state
-    dg(ProvideDgWant.UNUSED_DATA,src);
+    dg(ProvideDgWant.DONE_DATA,src);
     return ix;
 }
 
@@ -243,12 +243,21 @@ recode_windows1252(MoreCharDg dg, dchar[] dest)
             throw invalidCharacter(d);
         }
     }
-
+    bool refill()
+    {
+        if (source is null)
+        {
+            return dg(ProvideDgWant.INIT_DATA, source);
+        }
+        else {
+            return dg(ProvideDgWant.MORE_DATA, source);
+        }
+    }
     while (ix < dest.length)
     {
         if (source.length == 0)
         {
-            if (!dg(ProvideDgWant.MORE_DATA,source))
+            if (!refill())
                 return ix;
         }
         dchar test = source[0];
@@ -264,7 +273,7 @@ recode_windows1252(MoreCharDg dg, dchar[] dest)
             dest[ix++] = result;
         }
     }
-    dg(ProvideDgWant.UNUSED_DATA,source);
+    dg(ProvideDgWant.DONE_DATA,source);
     return ix;
 }
 /// For Latin 8 bit recoding
@@ -272,11 +281,21 @@ uintptr_t recode_latin1(MoreCharDg dg, dchar[] dest)
 {
     uintptr_t ix = 0;
     char[] source;
+    bool refill()
+    {
+        if (source is null)
+        {
+            return dg(ProvideDgWant.INIT_DATA, source);
+        }
+        else {
+            return dg(ProvideDgWant.MORE_DATA, source);
+        }
+    }
     while (ix < dest.length)
     {
         if (source.length == 0)
         {
-            if (!dg(ProvideDgWant.MORE_DATA,source))
+            if (!refill())
                 return ix;
             assert(source.length > 0);
         }
@@ -284,7 +303,7 @@ uintptr_t recode_latin1(MoreCharDg dg, dchar[] dest)
         dest[ix++] = source[0];
         source = source[1..$];
      }
-    dg(ProvideDgWant.UNUSED_DATA,source);
+    dg(ProvideDgWant.DONE_DATA,source);
     return ix;
 }
 
@@ -300,14 +319,22 @@ uintptr_t recode_ascii(MoreCharDg dg, dchar[] dest)
             throw invalidCharacter(d);
         }
     }
-
+    bool refill()
+    {
+        if (source is null)
+        {
+            return dg(ProvideDgWant.INIT_DATA, source);
+        }
+        else {
+            return dg(ProvideDgWant.MORE_DATA, source);
+        }
+    }
     while (ix < dest.length)
     {
         if (source.length == 0)
         {
-            if (!dg(ProvideDgWant.MORE_DATA,source))
+            if (!refill())
                 return ix;
-            assert(source.length > 0);
         }
 
         dchar test = source[0];
@@ -319,7 +346,7 @@ uintptr_t recode_ascii(MoreCharDg dg, dchar[] dest)
         }
         dest[ix++] = test;
      }
-    dg(ProvideDgWant.UNUSED_DATA,source);
+    dg(ProvideDgWant.DONE_DATA,source);
     return ix;
 }
 
@@ -366,15 +393,22 @@ recode_utf16(MoreWCharDg dg, dchar[] dest)
             throw invalidCharacter(d);
         }
     }
-
+    bool refill()
+    {
+        if (source is null)
+        {
+            return dg(ProvideDgWant.INIT_DATA, source);
+        }
+        else {
+            return dg(ProvideDgWant.MORE_DATA, source);
+        }
+    }
     while (ix < dest.length)
     {
         if (source.length==0)
         {
-            if (!dg(ProvideDgWant.MORE_DATA,source))
-            {
+            if (!refill())
                 return ix;
-            }
             assert(source.length > 0);
         }
 
@@ -388,7 +422,7 @@ recode_utf16(MoreWCharDg dg, dchar[] dest)
         }
         if (source.length==0)
         {
-            if (!dg(ProvideDgWant.MORE_DATA,source))
+            if (!refill())
             {
                 choke(d32);
                 return ix;
@@ -398,7 +432,7 @@ recode_utf16(MoreWCharDg dg, dchar[] dest)
         dest[ix++] = cast(dchar) 0x10000 + ((d32 & 0x3FF) << 10) + (source[0] & 0x3FF);
         source = source[1..$];
     }
-    dg(ProvideDgWant.UNUSED_DATA,source);
+    dg(ProvideDgWant.DONE_DATA,source);
     return ix;
 }
 
@@ -419,11 +453,21 @@ uintptr_t recode_swap_utf16(MoreWCharDg dg, dchar[] dest)
             throw invalidCharacter(d);
         }
     }
+    bool refill()
+    {
+        if (source is null)
+        {
+            return dg(ProvideDgWant.INIT_DATA, source);
+        }
+        else {
+            return dg(ProvideDgWant.MORE_DATA, source);
+        }
+    }
     while (ix < dest.length)
     {
         if (source.length==0)
         {
-            if (!dg(ProvideDgWant.MORE_DATA,source))
+            if (!refill())
             {
                 return ix;
             }
@@ -444,7 +488,7 @@ uintptr_t recode_swap_utf16(MoreWCharDg dg, dchar[] dest)
         dchar d = result.w0 & 0x3FF;
         if (source.length==0)
         {
-            if (!dg(ProvideDgWant.MORE_DATA,source))
+            if (!refill())
             {
                 choke(result.w0);
                 return ix;
@@ -459,7 +503,7 @@ uintptr_t recode_swap_utf16(MoreWCharDg dg, dchar[] dest)
 
         dest[ix++] = 0x10000 + ((result.w0 & 0x3FF) << 10) + d;
     }
-    dg(ProvideDgWant.UNUSED_DATA,source);
+    dg(ProvideDgWant.DONE_DATA,source);
     return ix;
 }
 
@@ -493,6 +537,17 @@ uintptr_t recode_utf32(MoreDCharDg dg, dchar[] dest)
 {
     uintptr_t ix = 0;
     dchar[] source;
+    bool refill()
+    {
+        if (source is null)
+        {
+            return dg(ProvideDgWant.INIT_DATA, source);
+        }
+        else {
+            return dg(ProvideDgWant.MORE_DATA, source);
+        }
+    }
+
     while (ix < dest.length)
     {
         if (source.length == 0)
@@ -504,7 +559,7 @@ uintptr_t recode_utf32(MoreDCharDg dg, dchar[] dest)
         dest[ix++] = source[0];
         source = source[1..$];
      }
-    dg(ProvideDgWant.UNUSED_DATA,source);
+    dg(ProvideDgWant.DONE_DATA,source);
     return ix;
 
 }
@@ -648,6 +703,7 @@ class ByteOrderMark
     bom = marks;
     endOrder = ed;
     charSize = bsize;
+
 }
 };
 
@@ -663,20 +719,38 @@ struct ByteOrderRegistry
     __gshared ByteOrderMark	noMark;
 
     __gshared static this()
-{
-    noMark = new ByteOrderMark(DecoderKey("UTF-8",null), [], endian, 1);
-    register(new ByteOrderMark(DecoderKey("UTF-8",null), [0xEF, 0xBB, 0xBF], endian, 1));
-    register(new ByteOrderMark(DecoderKey("UTF-16","LE"), [0xFF, 0xFE], Endian.littleEndian, 2));
-    register(new ByteOrderMark(DecoderKey("UTF-16","BE"), [0xFE, 0xFF], Endian.bigEndian, 2));
-    register(new ByteOrderMark(DecoderKey("UTF-32","LE"), [0xFF, 0xFE, 0x00, 0x00], Endian.littleEndian, 4));
-    register(new ByteOrderMark(DecoderKey("UTF-32","BE"), [0x00, 0x00, 0xFE, 0xFF], Endian.bigEndian,4));
-}
+    {
+        noMark = new ByteOrderMark(DecoderKey("UTF-8",null), [], endian, 1);
+        registerBOM(new ByteOrderMark(DecoderKey("UTF-8",null), [0xEF, 0xBB, 0xBF], endian, 1));
+        registerBOM(new ByteOrderMark(DecoderKey("UTF-16","LE"), [0xFF, 0xFE], Endian.littleEndian, 2));
+        registerBOM(new ByteOrderMark(DecoderKey("UTF-16","BE"), [0xFE, 0xFF], Endian.bigEndian, 2));
+        registerBOM(new ByteOrderMark(DecoderKey("UTF-32","LE"), [0xFF, 0xFE, 0x00, 0x00], Endian.littleEndian, 4));
+        registerBOM(new ByteOrderMark(DecoderKey("UTF-32","BE"), [0x00, 0x00, 0xFE, 0xFF], Endian.bigEndian,4));
 
-/// add  ByteOrderMark signatures
-static void register(ByteOrderMark bome)
-{
-    list ~= bome;
-}
+    }
+
+    /// add  ByteOrderMark signatures
+    static void registerBOM(ByteOrderMark bome)
+    {
+        list ~= bome;
+    }
+    /** Argument k must be upper case */
+    static const(ByteOrderMark) findBOM(string k)
+    {
+        foreach(ByteOrderMark b ; list)
+        {
+            auto kname = b.key.codeName;
+            if (indexOf(k, kname) == 0)
+            {
+                if (kname.length == k.length)
+                    return b;
+                auto kend = k[kname.length..$];
+                if (kend == b.key.bomName)
+                    return b;
+            }
+        }
+        return null;
+    }
 
 }
 

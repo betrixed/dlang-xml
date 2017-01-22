@@ -4,3 +4,7 @@ xmlconf/
 **/Debug/
 **/*.depend
 **/*.layout
+**/.dub
+examples/giss/**/*.txt
+examples/giss/**/*.list
+examples/giss/**/*.v2

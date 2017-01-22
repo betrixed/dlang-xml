@@ -5,7 +5,7 @@ import xml.dom.domt,xml.txml;
 import xml.xmlError, xml.xmlParser, xml.xmlLinkDom;
 import texi.inputEncode;
 import texi.inputblock;
-
+import xml.util.jisx0208;
 import std.stdint, std.path, std.stdio;
 import std.algorithm;
 
@@ -19,6 +19,8 @@ template XMLTESTS(T)
 	alias xmlt!(T).XmlString  XmlString;
 
 	alias XMLDOM!(T).Element			Element;
+	alias XMLDOM!(T).ChildElementRange	ChildElementRange;
+
 	alias XMLDOM!(T).Document			Document;
 	alias XMLDOM!(T).DOMConfiguration	DOMConfiguration;
 	alias XMLDOM!(T).DOMVisitor			DOMVisitor;
@@ -69,6 +71,10 @@ template XMLTESTS(T)
 		string  workDir;
 		XmlConfTest[XmlString] tests;
 
+		static this()
+		{
+            register_EUC_JP();
+		}
 		int perform()
 		{
 			baseDir = dirName(testsXmlFile);
@@ -117,10 +123,7 @@ template XMLTESTS(T)
 					}
 				}
 			}
-			//getchar();
 			return 0;
-
-
 		}
 		bool readTests(string path)
 		{
@@ -161,31 +164,17 @@ template XMLTESTS(T)
 				return false;
 			}
 
-			DOMVisitor visit;
 
-			visit.startElement(doc.getDocumentElement());
-			intptr_t orderNum;
+			intptr_t orderNum = 0;
 
-			do
+			foreach( Element e; ChildElementRange(doc.getDocumentElement))
 			{
-				if (visit.nodeType == NodeType.Element_node)
-				{
-					Element e = visit.element;
-					if (visit.isElement && e.getTagName() == "TESTCASES")
-					{
-						testCasesElement(e,orderNum);
-						visit.doneElement();
-					}
-					else if (!visit.isElement)
-					{
-						//writeln("End " , e.getTagName());
-					}
-				}
+				if (e.getNodeName() == "TESTCASES")
+                    testCasesElement(e,orderNum);
 			}
-			while (visit.nextNode());
 
-			return true;
-
+            writeln(orderNum, " total tests");
+            return true;
 		}
 
 		bool runTests(string baseDir, bool stopfail)
@@ -276,8 +265,6 @@ template XMLTESTS(T)
 		void testCasesElement(Element cases, ref intptr_t orderNum)
 		{
 			// extract base directory, then the test cases
-
-
 			auto baseDir = cases.getAttribute("xml:base");
 			auto slen = baseDir.length;
 			if (slen > 0)
@@ -286,35 +273,41 @@ template XMLTESTS(T)
 				if (baseDir[slen] == '\\' || baseDir[slen] == '/')
 					baseDir.length = slen;
 			}
-			DOMVisitor visit;
 
-			visit.startElement(cases);
-
-			do
+			void testElement(Element te)
 			{
-				if (visit.nodeType == NodeType.Element_node)
-				{
-					Element e = visit.element;
-					if (visit.isElement && e.getTagName() == "TEST")
-					{
-						auto dir = to!string(baseDir);
-						auto t = doTestElement(e,dir);
-						if (t !is null)
-						{
-							t.order_ = ++orderNum;
-							t.summary = this.summary;
-							tests[t.id] = t;
-						}
-						visit.doneElement();
-					}
-					else if (!visit.isElement)
-					{
-						//writeln("End " , e.getTagName());
-					}
-				}
+                auto dir = to!string(baseDir);
+                auto t = doTestElement(te,dir);
+                if (t !is null)
+                {
+                    t.order_ = ++orderNum;
+                    t.summary = this.summary;
+                    tests[t.id] = t;
+                }
 			}
-			while (visit.nextNode());
-
+			void subTestCases(Element sub)
+			{
+                foreach(Element e; ChildElementRange(sub))
+                {
+                    auto tag = e.getNodeName();
+                    if (tag == "TEST")
+                    {
+                        testElement(e);
+                    }
+                }
+			}
+			foreach(Element e; ChildElementRange(cases))
+			{
+                auto tag = e.getNodeName();
+                if (tag == "TESTCASES")
+                {
+                    subTestCases(e);
+                }
+                else if (tag == "TEST")
+                {
+                    testElement(e);
+                }
+			}
 		}
 	}
 

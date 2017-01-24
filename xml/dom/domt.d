@@ -1,6 +1,6 @@
 /**
-	A DOM very similar to Java DOM.
-	with navigation between linked parent, child and sibling nodes.
+    A DOM very similar to Java DOM.
+    with navigation between linked parent, child and sibling nodes.
 
 Authors: Michael Rynn
 Licence: <a href="http://www.boost.org/LICENSE_1_0.txt">Boost License 1.0</a>.
@@ -34,7 +34,7 @@ import xml.xmlError;
 
 
 version(GC_STATS) {
-	import texi.gcstats;
+    import texi.gcstats;
 }
 /// This modules exception class
 class DOMFail : Exception
@@ -60,10 +60,10 @@ import std.algorithm;
 /// Java dom class name for a string[] wrapper
 class StringList(T)
 {
-	alias immutable(T)[] StringType;
+    alias immutable(T)[] StringType;
 protected:
     StringType[] items_;
-	bool		 sorted_;
+    bool         sorted_;
 public:
 
     this()
@@ -77,11 +77,11 @@ public:
         return items_;
     }
 
-	void doSort()
-	{
-		sorted_ = true;
-		sort(items_);
-	}
+    void doSort()
+    {
+        sorted_ = true;
+        sort(items_);
+    }
     /// Its quite simple
     this( StringType[] list)
     {
@@ -105,7 +105,7 @@ public:
     /// checked access
     StringType item(uintptr_t ix)
     {
-        if	(ix >= items_.length)
+        if  (ix >= items_.length)
             return null;
         return items_[ix];
     }
@@ -114,16 +114,16 @@ public:
 
 template XMLDOM(T)
 {
-	alias xmlt!T.XmlString XmlString;
-	alias xmlt!T.StringPutDg StringPutDg;
+    alias xmlt!T.XmlString XmlString;
+    alias xmlt!T.StringPutDg StringPutDg;
 
-	alias XMLAttribute!T.AttributeMap	AttributeMap;
-	static if (is(T==char))
-		alias std.conv.text	 concats;
-	else static if (is(T==wchar))
-		alias std.conv.wtext concats;
-	else
-		alias std.conv.dtext concats;
+    alias XMLAttribute!T.AttributeMap   AttributeMap;
+    static if (is(T==char))
+        alias std.conv.text  concats;
+    else static if (is(T==wchar))
+        alias std.conv.wtext concats;
+    else
+        alias std.conv.dtext concats;
 
 
 
@@ -135,42 +135,42 @@ alias int function(Node n1, Node n2) NodeCompareFn;
 /// This class is abstract. Most methods do nothing.
 abstract class Node
 {
-	/// return a node as a string value
+    /// return a node as a string value
 
 
-	version(GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
+    version(GC_STATS)
+    {
+        mixin GC_statistics;
+        static this()
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
+    }
     package
     {
         XmlString  id_;
     }
 public:
     /// construct
-	version(GC_STATS)
-	{
-		~this()
-		{
-			gcStatsSum.dec();
-		}
-	}
-	this()
-	{
-		version(GC_STATS)
-			gcStatsSum.inc();
-	}
+    version(GC_STATS)
+    {
+        ~this()
+        {
+            gcStatsSum.dec();
+        }
+    }
+    this()
+    {
+        version(GC_STATS)
+            gcStatsSum.inc();
+    }
 
     /// construct
     this(XmlString id)
     {
         id_ = id;
-		version(GC_STATS)
-			gcStatsSum.inc();
+        version(GC_STATS)
+            gcStatsSum.inc();
     }
     /// hashable on id_
     override const hash_t toHash()
@@ -218,7 +218,7 @@ public:
         return null;
     }
     /// DOM method returns null,
-	Node getNextSibling()
+    Node getNextSibling()
     {
         return null;
     }
@@ -271,16 +271,16 @@ public:
         return null;
     }
 
-	/**
-	Pre-emptive strike to devastate object, and possibly delete at same NStile.
-	Destructor, must call with del false, and ideally explode can tell,
-	if its job is already done.
-	*/
+    /**
+    Pre-emptive strike to devastate object, and possibly delete at same NStile.
+    Destructor, must call with del false, and ideally explode can tell,
+    if its job is already done.
+    */
 
-	void explode()
-	{
-		this.destroy();
-	}
+    void explode()
+    {
+        this.destroy();
+    }
 
 
     /// Not supported
@@ -382,13 +382,13 @@ public:
     }
 
     /**
-	* Retrieves the object associated with key, last set using setUserData.
-	* Params:
-	* key = The key the object is associated to.
-	* Returns: the object associated to the given
-	*   key on this node, null
-	*
-	*/
+    * Retrieves the object associated with key, last set using setUserData.
+    * Params:
+    * key = The key the object is associated to.
+    * Returns: the object associated to the given
+    *   key on this node, null
+    *
+    */
     /// not implemented, returns null
     Object getUserData(XmlString key)
     {
@@ -406,18 +406,18 @@ public:
     {
         return null;
     }
-	/// Object.toString is fixed as string return type
-	XmlString toXmlString()
-	{
-		return ( getNodeType()==NodeType.Element_node) ? getTextContent() :  getNodeValue();
-	}
+    /// Object.toString is fixed as string return type
+    XmlString toXmlString()
+    {
+        return ( getNodeType()==NodeType.Element_node) ? getTextContent() :  getNodeValue();
+    }
 }
 
 /// Wraps naked Node[] as class.
 class NodeList
 {
 
-    Node[]		items_;
+    Node[]      items_;
 public:
     @property final uintptr_t getLength()
     {
@@ -494,7 +494,7 @@ public:
     }
 
     /// index support
-	Node opIndex(size_t ix)
+    Node opIndex(size_t ix)
     {
         return items_[ix];
     }
@@ -523,35 +523,35 @@ public:
 static void NodeShellSort(Node[] nodes, NodeCompareFn cmp)
 {
 
-	auto limit = nodes.length;
-	if (limit < 2)
-		return;
-	static immutable int[] gapseq =
-	[1391376, 463792, 198768, 86961, 33936, 13776, 4592,
-	1968, 861, 336, 112, 48, 21, 7, 3, 1];
+    auto limit = nodes.length;
+    if (limit < 2)
+        return;
+    static immutable int[] gapseq =
+    [1391376, 463792, 198768, 86961, 33936, 13776, 4592,
+    1968, 861, 336, 112, 48, 21, 7, 3, 1];
 
-	for(uint gapix = 0; gapix < gapseq.length; gapix++)
-	{
-		const int gap = gapseq[gapix];
+    for(uint gapix = 0; gapix < gapseq.length; gapix++)
+    {
+        const int gap = gapseq[gapix];
 
-		for (int i = gap; i < limit; i++)
-		{
-			Node v = nodes[i];
-			int j = i;
-			while (j >= gap)
-			{
-				Node c = nodes[j-gap];
-				if (cmp(c,v) > 0)
-				{
-					nodes[j] = c;
-					j = j-gap;
-				}
-				else
-					break;
-			}
-			nodes[j] = v;
-		}
-	}
+        for (int i = gap; i < limit; i++)
+        {
+            Node v = nodes[i];
+            int j = i;
+            while (j >= gap)
+            {
+                Node c = nodes[j-gap];
+                if (cmp(c,v) > 0)
+                {
+                    nodes[j] = c;
+                    j = j-gap;
+                }
+                else
+                    break;
+            }
+            nodes[j] = v;
+        }
+    }
 }
 
 
@@ -596,7 +596,7 @@ import std.variant;
 class DOMConfiguration
 {
     Document ownerDoc_;
-    Variant[string]	map_;
+    Variant[string] map_;
 
     /*
     The parameter can be set, if exists in the map_, and
@@ -622,7 +622,7 @@ public:
         setParameter("cdata-sections",Variant(true));
         setParameter("check-character-normalization",Variant(false));
         setParameter("comments",Variant(true));
-        setParameter("entities",Variant(true));
+        setParameter("entities",Variant(false)); // otherwise tests fail on default setting
         Variant eh = new DOMErrorHandler();
         setParameter("error-handler",eh);
         setParameter("edition",Variant(cast(uint)5));
@@ -652,44 +652,44 @@ public:
 class DocumentType  : ChildNode
 {
 package:
-    XmlString	publicId;
-    XmlString	systemId;
+    XmlString   publicId;
+    XmlString   systemId;
 
     NamedNodeMap entities_;
     NamedNodeMap notations_;
     XmlString internal_;
 
 public:
-	version(GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
+    version(GC_STATS)
+    {
+        mixin GC_statistics;
+        static this()
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
+    }
 
-	~this()
-	{
-		version(GC_STATS)
-			gcStatsSum.dec();
-	}
+    ~this()
+    {
+        version(GC_STATS)
+            gcStatsSum.dec();
+    }
     override const NodeType getNodeType()
     {
         return NodeType.Document_type_node;
     }
 
-	void setSource(XmlString pubid, XmlString sysid)
-	{
-		publicId = pubid;
-		systemId = sysid;
-	}
+    void setSource(XmlString pubid, XmlString sysid)
+    {
+        publicId = pubid;
+        systemId = sysid;
+    }
 
-	override void explode()
-	{
-		entities_.explode();
-		notations_.explode();
-	}
+    override void explode()
+    {
+        entities_.explode();
+        notations_.explode();
+    }
 
     XmlString getPublicId()
     {
@@ -705,8 +705,8 @@ public:
         id_ = name;
         entities_ = new NamedNodeMap();
         notations_ = new NamedNodeMap();
-		version(GC_STATS)
-			gcStatsSum.inc();
+        version(GC_STATS)
+            gcStatsSum.inc();
 
     }
     /// what good is this?
@@ -739,7 +739,13 @@ public:
 
 }
 
-/// Not yet used
+/**
+
+
+
+*/
+
+
 class EntityReference : ChildNode
 {
 public:
@@ -808,52 +814,52 @@ public:
 /// Essential DOM component
 class Document  : Node
 {
-    DocumentType	dtd_;
-    Element			docElement_;
-    Element			rootElement_; // for comments, processing instructions.
+    DocumentType    dtd_;
+    Element         docElement_;
+    Element         rootElement_; // for comments, processing instructions.
 
-    DOMConfiguration		config_;
-    DOMImplementation		implementation_;
-    DOMErrorHandler			errorHandler_;
+    DOMConfiguration        config_;
+    DOMImplementation       implementation_;
+    DOMErrorHandler         errorHandler_;
 
-    XmlString		version_;
-    double			versionNum_;
-    uint			edition_ = 5;
-    XmlString		encoding_;
-    XmlString		inputEncoding_;
-    bool			standalone_;
-    bool			check_;
-    bool			namespaceAware_;
-    XmlString		uri_;
-	uintptr_t		refcount_;
+    XmlString       version_;
+    double          versionNum_;
+    uint            edition_ = 5;
+    XmlString       encoding_;
+    XmlString       inputEncoding_;
+    bool            standalone_;
+    bool            check_;
+    bool            namespaceAware_;
+    XmlString       uri_;
+    uintptr_t       refcount_;
 public:
-	version(GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
+    version(GC_STATS)
+    {
+        mixin GC_statistics;
+        static this()
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
+    }
     this()
     {
         init("NoName");
 
     }
 
-	~this()
-	{
-		version(GC_STATS)
-			gcStatsSum.dec();
+    ~this()
+    {
+        version(GC_STATS)
+            gcStatsSum.dec();
 
-	}
-	/// Initialise with a name, but this does not make a Document Element.
+    }
+    /// Initialise with a name, but this does not make a Document Element.
     this(XmlString name)
     {
         init(name);
     }
 
-	/// Initialise with a Document Element
+    /// Initialise with a Document Element
     this(Element root)
     {
         init("NoName");
@@ -866,7 +872,7 @@ public:
         dtd_ = docType;
     }
 
-	/// Part of DOM
+    /// Part of DOM
     override const NodeType getNodeType()
     {
         return NodeType.Document_node;
@@ -892,18 +898,18 @@ public:
         check_ = val;
     }
 
-	void incRef()
-	{
-		refcount_++;
-	}
+    void incRef()
+    {
+        refcount_++;
+    }
 
-	void decRef()
-	{
-		if (refcount_ == 1)
-			explode();
-		else
-			refcount_--;
-	}
+    void decRef()
+    {
+        if (refcount_ == 1)
+            explode();
+        else
+            refcount_--;
+    }
     /// Document property, not available yet
     DocumentType getDoctype()
     {
@@ -1101,10 +1107,10 @@ public:
     }
 
     /**
-    	Not tested or useful yet.
-    	Rename one of the documents nodes.
-    	The facility to rename a node, is not in the actual Node interface?
-    	The local name can be a prefix:name.
+        Not tested or useful yet.
+        Rename one of the documents nodes.
+        The facility to rename a node, is not in the actual Node interface?
+        The local name can be a prefix:name.
     */
     Node renameNode(Node n, XmlString uri, XmlString local)
     {
@@ -1170,8 +1176,8 @@ public:
 
     private void init(XmlString name)
     {
-		version(GC_STATS)
-			gcStatsSum.inc();
+        version(GC_STATS)
+            gcStatsSum.inc();
         id_ = name;
 
         standalone_ = true;
@@ -1215,26 +1221,26 @@ public:
         implementation_ = idom;
     }
 
-	void unlink()
-	{
-		dtd_ = null;
-		docElement_= null;
-		rootElement_= null; // for comments, processing instructions.
-		config_= null;
-		implementation_= null;
-		errorHandler_= null;
-	}
+    void unlink()
+    {
+        dtd_ = null;
+        docElement_= null;
+        rootElement_= null; // for comments, processing instructions.
+        config_= null;
+        implementation_= null;
+        errorHandler_= null;
+    }
 
-	/// tear everything apart for attempts at garbage collection
-	override void explode()
-	{
-		auto elem = getRootElement();
-		rootElement_ = null;
-		elem.explode();
-		unlink();
-		super.explode();
-	}
-	// public, because only forces a work around if package
+    /// tear everything apart for attempts at garbage collection
+    override void explode()
+    {
+        auto elem = getRootElement();
+        rootElement_ = null;
+        elem.explode();
+        unlink();
+        super.explode();
+    }
+    // public, because only forces a work around if package
     public Element getRootElement()
     {
         return rootElement_;
@@ -1302,6 +1308,7 @@ public:
         return result;
 
     }
+
     /// DOM node constructor for this document
     Text
     createTextNode(XmlString data)
@@ -1341,7 +1348,7 @@ public:
 }
 
 /** Not really used yet. Not sure what its good for.
-	Holds a linked list of nodes.
+    Holds a linked list of nodes.
 */
 class DocumentFragment : Node
 {
@@ -1385,6 +1392,12 @@ public:
         }
         return new NodeList(items);
     }
+
+    override NodeType getNodeType() const
+    {
+            return NodeType.Document_fragment_node;
+
+    }
     /// Throws exception if child is attached elsewhere
     override Node  appendChild(Node newChild)
     {
@@ -1400,18 +1413,17 @@ public:
 }
 
 
-
 /**
-	Java DOM class semblance, that stores attributes for an Element,
-	Implementation uses a simple list in triggered sort order.
+    Java DOM class semblance, that stores attributes for an Element,
+    Implementation uses a simple list in triggered sort order.
 */
 class NamedNodeMap
 {
 
 private:
-    NodeCompareFn	cmp_;
-    Node[]		    items_;
-    bool			sorted_;
+    NodeCompareFn   cmp_;
+    Node[]          items_;
+    bool            sorted_;
 public:
 
     static int CompareNodes(Node n1, Node n0)
@@ -1493,21 +1505,21 @@ public:
         return 0;
     }
 
-	/**
-	Pre-emptive strike to devastate object, and possibly delete at same tile.
-	Destructor, must call with del false, and ideally explode can tell,
-	if its job is already done.
-	*/
-	void explode()
-	{
-		auto oldItems = items_;
-		items_ = [];
+    /**
+    Pre-emptive strike to devastate object, and possibly delete at same tile.
+    Destructor, must call with del false, and ideally explode can tell,
+    if its job is already done.
+    */
+    void explode()
+    {
+        auto oldItems = items_;
+        items_ = [];
 
-		foreach(n ; oldItems)
-		{
-			n.explode();
-		}
-	}
+        foreach(n ; oldItems)
+        {
+            n.explode();
+        }
+    }
 
     private void erase(size_t ix)
     {
@@ -1610,19 +1622,19 @@ public:
         return result;
     }
 
-	final void destroy()
-	{
-		if (items_ !is null)
-			items_.destroy();
-		items_ = null;
-	}
+    final void destroy()
+    {
+        if (items_ !is null)
+            items_.destroy();
+        items_ = null;
+    }
 private:
 
     void sortMe()
     {
         sorted_ = true;
-		if (items_.length > 1)
-			NodeShellSort(items_, cmp_);
+        if (items_.length > 1)
+            NodeShellSort(items_, cmp_);
     }
     /// return -1 if not found
     intptr_t findNameIndex(const(T)[] name)
@@ -1691,13 +1703,13 @@ private:
 abstract class ChildNode : Node
 {
 protected:
-    Node				parent_;
-    ChildNode			next_;
-    ChildNode			prev_;
-    //Document			ownerDoc_;
+    Node                parent_;
+    ChildNode           next_;
+    ChildNode           prev_;
+    //Document          ownerDoc_;
 public:
 
-	/// For shuffling smallish numbers of nodes.s
+    /// For shuffling smallish numbers of nodes.s
 
     this(XmlString id)
     {
@@ -1755,7 +1767,7 @@ public:
     }
 
     /** Only Elements actually hold a reference to the ownerDocument.
-    	Other nodes can refer via the parent Element.
+        Other nodes can refer via the parent Element.
     */
     override Document getOwnerDocument()
     {
@@ -1771,7 +1783,7 @@ public:
     /*
     void setDocument(Document d)
     {
-    	ownerDoc_ = d;
+        ownerDoc_ = d;
     }
 
     */
@@ -1783,17 +1795,17 @@ struct ChildList
     ChildNode firstChild_;
     ChildNode lastChild_;
 
-	/// Remove all links at once. Let the GC sort this out!
-	void removeAll()
-	{
-		firstChild_ = null;
-		lastChild_ = null;
-	}
+    /// Remove all links at once. Let the GC sort this out!
+    void removeAll()
+    {
+        firstChild_ = null;
+        lastChild_ = null;
+    }
 
-	bool empty()
-	{
-		return((firstChild_ is null) && (lastChild_ is null));
-	}
+    bool empty()
+    {
+        return((firstChild_ is null) && (lastChild_ is null));
+    }
 
     /// remove
     void removeLink(ChildNode ch)
@@ -1816,8 +1828,8 @@ struct ChildList
         {
             lastChild_ = ch.prev_;
         }
-		ch.prev_ = null;
-		ch.next_ = null;
+        ch.prev_ = null;
+        ch.next_ = null;
     }
 
     /// add
@@ -1917,8 +1929,8 @@ public:
 
     /** Contradicted constructor for Element with same arguments
         If name is localName, then will need to lookup URI local prefix in tree to make id?
-    	Find parent node which has xmlns:<prefix> = URI. But at construction do not have parent.
-    	So at least a check takes place when adding to document.
+        Find parent node which has xmlns:<prefix> = URI. But at construction do not have parent.
+        So at least a check takes place when adding to document.
     */
     this(XmlString uri, XmlString name)
     {
@@ -1991,18 +2003,18 @@ struct ElemAttributeMap
 /// Binds the document tree together.
 class Element :  ChildNode
 {
-	version(GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
+    version(GC_STATS)
+    {
+        mixin GC_statistics;
+        static this()
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
+    }
 protected:
-    NamedNodeMap		attributes_;
-    ChildList			children_;
-    Document			ownerDoc_;
+    NamedNodeMap        attributes_;
+    ChildList           children_;
+    Document            ownerDoc_;
 public:
     /// method
     override Document getOwnerDocument()
@@ -2013,33 +2025,33 @@ public:
     this(XmlString  tag)
     {
         super(tag);
-		version (GC_STATS)
-			gcStatsSum.inc();
+        version (GC_STATS)
+            gcStatsSum.inc();
     }
     /// construct
     this()
     {
- 		version (GC_STATS)
-			gcStatsSum.inc();
-	}
-	/**
-		If object is left to garbage collector, explode(false)
-		should further dismember in safety, or do nothing.
-	*/
-	~this()
-	{
-		//explode(false);
- 		version (GC_STATS)
-			gcStatsSum.dec();
-	}
+        version (GC_STATS)
+            gcStatsSum.inc();
+    }
+    /**
+        If object is left to garbage collector, explode(false)
+        should further dismember in safety, or do nothing.
+    */
+    ~this()
+    {
+        //explode(false);
+        version (GC_STATS)
+            gcStatsSum.dec();
+    }
     /// construct, with single child of text content
     this(XmlString tag, XmlString content)
     {
         super(tag);
         auto txt = new Text(content);
         appendChild(txt);
-		version (GC_STATS)
-			gcStatsSum.inc();
+        version (GC_STATS)
+            gcStatsSum.inc();
     }
     /// method
     override bool hasAttributes()
@@ -2053,28 +2065,28 @@ public:
     }
 
     /// method
-    override bool	 hasChildNodes()
+    override bool    hasChildNodes()
     {
         return children_.firstChild_ !is null;
     }
 
-	void countLeaves(ref ulong count)
-	{
-		count++;
-		if (attributes_ !is null)
-			count += (attributes_.getLength());
+    void countLeaves(ref ulong count)
+    {
+        count++;
+        if (attributes_ !is null)
+            count += (attributes_.getLength());
 
-		auto ch = this.getFirstChild();
-		while (ch !is null)
-		{
-			auto elem = cast(Element) ch;
-			ch = ch.getNextSibling();
-			if (elem !is null)
-				elem.countLeaves(count);
-			else
-				count++;
-		}
-	}
+        auto ch = this.getFirstChild();
+        while (ch !is null)
+        {
+            auto elem = cast(Element) ch;
+            ch = ch.getNextSibling();
+            if (elem !is null)
+                elem.countLeaves(count);
+            else
+                count++;
+        }
+    }
     /// return children as array
     ChildNode[] childNodes()
     {
@@ -2151,7 +2163,7 @@ public:
     /// Add all the child Elements with name to the NodeList argument
     void addChildTags(XmlString name, NodeList nlist)
     {
-        ChildNode link	 = children_.firstChild_;
+        ChildNode link   = children_.firstChild_;
 
         while (link !is null)
         {
@@ -2285,17 +2297,17 @@ public:
         }
         return result;
     }
-	/// Brutal replacement of all children with single text node
-	override void setTextContent(XmlString txt)
-	{
-		children_.removeAll();
-		if (txt.length > 0)
-			appendChild(new Text(txt));
-	}
+    /// Brutal replacement of all children with single text node
+    override void setTextContent(XmlString txt)
+    {
+        children_.removeAll();
+        if (txt.length > 0)
+            appendChild(new Text(txt));
+    }
     ///Recursive on Text-like data.  Has no implementation of isTextNodeWhiteSpace
     override XmlString getTextContent() const
     {
-        Buffer!T	app;
+        Buffer!T    app;
 
         auto xn = cast(ChildNode) children_.firstChild_; // trouble with const
         if (xn is null)
@@ -2306,8 +2318,8 @@ public:
             auto n = xn;
             switch(n.getNodeType())
             {
-				//case NodeType.Comment_node://
-				//case NodeType.Processing_Instruction_node:
+                //case NodeType.Comment_node://
+                //case NodeType.Processing_Instruction_node:
             case NodeType.CDATA_Section_node:
             case NodeType.Text_node:
             case NodeType.Element_node:
@@ -2323,28 +2335,28 @@ public:
         return app.idup;
     }
 
-	/// Take tree apart.  For work of navigating entire tree, might as
-	/// delete as well.  Used parts of tree should be removed before calling this.
-	override void explode()
-	{
-		if (attributes_ !is null)
-		{
-			attributes_.explode();
-		}
-		auto ch = getFirstChild();
-		while(ch !is null)
-		{
-			auto exploder = ch;
-			ch = ch.getNextSibling();
-			removeChild(exploder);
-			exploder.explode();
-		}
-		ownerDoc_ = null;
-		assert(children_.empty());
-		super.explode();
-	}
+    /// Take tree apart.  For work of navigating entire tree, might as
+    /// delete as well.  Used parts of tree should be removed before calling this.
+    override void explode()
+    {
+        if (attributes_ !is null)
+        {
+            attributes_.explode();
+        }
+        auto ch = getFirstChild();
+        while(ch !is null)
+        {
+            auto exploder = ch;
+            ch = ch.getNextSibling();
+            removeChild(exploder);
+            exploder.explode();
+        }
+        ownerDoc_ = null;
+        assert(children_.empty());
+        super.explode();
+    }
 
-	/// Set the ownerDoc_ member of entire subtree.
+    /// Set the ownerDoc_ member of entire subtree.
     void setDocument(Document d)
     {
         if (ownerDoc_ == d)
@@ -2363,7 +2375,7 @@ public:
         }
     }
 
-	/// This is none-DOM, put in because std.xml had it
+    /// This is none-DOM, put in because std.xml had it
     @property  XmlString text() const
     {
         return getTextContent();
@@ -2625,7 +2637,7 @@ class Attr : Node
 protected:
     XmlString value_;
     Element   owner_; // back links make GC harder
-    //uint	  flags_;
+    //uint    flags_;
 
     enum
     {
@@ -2674,11 +2686,11 @@ public:
         owner_ = e;
     }
 
-	override void explode()
-	{
-		owner_ = null;
-		super.explode();
-	}
+    override void explode()
+    {
+        owner_ = null;
+        super.explode();
+    }
 
     /// Property
     final Element getOwnerElement()
@@ -2753,11 +2765,11 @@ public:
     {
         return id_;
     }
-	/// Takes text, so set it
-	override void setTextContent(XmlString txt)
-	{
-		id_ = txt;
-	}
+    /// Takes text, so set it
+    override void setTextContent(XmlString txt)
+    {
+        id_ = txt;
+    }
 
 };
 
@@ -2852,15 +2864,15 @@ public:
 class IdNode :  Node
 {
 private:
-    XmlString	publicId_;
-	XmlString	systemId_;
+    XmlString   publicId_;
+    XmlString   systemId_;
 
 public:
 
-	this(XmlString name)
-	{
-		id_ = name;
-	}
+    this(XmlString name)
+    {
+        id_ = name;
+    }
     override XmlString getNodeName()
     {
         return id_;
@@ -2875,17 +2887,17 @@ public:
         return systemId_;
     }
 
-	void setSource(XmlString pubId, XmlString sysId)
-	{
-		publicId_ = pubId;
-		systemId_ = sysId;
-	}
+    void setSource(XmlString pubId, XmlString sysId)
+    {
+        publicId_ = pubId;
+        systemId_ = sysId;
+    }
 
     XmlString externalSource() const
     {
         Buffer!T result;
 
-		result.reserve(publicId_.length + systemId_.length+ 6);
+        result.reserve(publicId_.length + systemId_.length+ 6);
 
         void addqt(XmlString n, XmlString v)
         {
@@ -2898,15 +2910,15 @@ public:
         if (publicId_.length > 0)
             addqt("PUBLIC",publicId_);
         if (systemId_.length > 0)
-		{
-			if (publicId_.length == 0)
-			{
-				addqt("SYSTEM" ,systemId_);
-			}
-			else {
-				addqt([] ,systemId_);
-			}
-		}
+        {
+            if (publicId_.length == 0)
+            {
+                addqt("SYSTEM" ,systemId_);
+            }
+            else {
+                addqt([] ,systemId_);
+            }
+        }
         return result.length > 0 ? result.idup : null;
     }
 }
@@ -2917,16 +2929,17 @@ public:
 class Entity : IdNode
 {
 public:
-	XmlString	 value_;
-	XmlString	 encoding_;
-	XmlString	 version_;
-	bool		 isNData_;
+    XmlString    value_;
+    XmlString    encoding_;
+    XmlString    version_;
+    bool         isNData_;
+              DocumentFragment      nodes_;
 
     this(XmlString name, XmlString value, bool isNData = false)
     {
-		super(name);
-		value_ = value;
-		isNData_ = isNData;
+        super(name);
+        value_ = value;
+        isNData_ = isNData;
     }
 
     override XmlString getNodeValue()
@@ -2955,18 +2968,28 @@ public:
     {
         return NodeType.Entity_node;
     }
+
+    DocumentFragment getFragment()
+    {
+        return nodes_;
+    }
+
+    void setFragment(DocumentFragment f)
+    {
+        nodes_ = f;
+    }
 }
 
 
 
 class Notation : IdNode
 {
-	this(XmlString id)
-	{
-		super(id);
-	}
+    this(XmlString id)
+    {
+        super(id);
+    }
 
-    override 	NodeType getNodeType () const
+    override    NodeType getNodeType () const
     {
         return NodeType.Notation_node;
     }
@@ -2977,7 +3000,7 @@ class Notation : IdNode
     }
 }
 
-alias XMLOutput!T.XmlPrinter	PrintDom;
+alias XMLOutput!T.XmlPrinter    PrintDom;
 
 void printDocType(DocumentType dtd, PrintDom tp)
 {
@@ -3026,13 +3049,13 @@ void printLinked(Node n, PrintDom tp)
         case NodeType.Comment_node:
             if (!tp.noComments)
                 tp.putIndent(n.toXmlString());
-			break;
+            break;
         case NodeType.CDATA_Section_node:
             tp.putIndent(n.toXmlString());
             break;
         case NodeType.Processing_Instruction_node:
-			tp.putIndent(n.toXmlString());
-			break;
+            tp.putIndent(n.toXmlString());
+            break;
         case NodeType.Document_type_node:
             // only output if have notations;
             printDocType(cast(DocumentType) n, tp);
@@ -3074,7 +3097,7 @@ void printDocument(Document d, StringPutDg putOut, uint indent)
         {
             attributes.push("standalone", d.getXmlStandalone() ? "yes" : "no");
             attributes.push("encoding", d.getXmlEncoding()); // this may not be valid, since its utf-8 string right here.
-			attributes.sort();
+            attributes.sort();
         }
         //
         XMLOutput!T.printXmlDeclaration(attributes, putOut);
@@ -3122,45 +3145,45 @@ void printElement(Element e, PrintDom tp)
 
 
 /** Keeps track of active namespace definitions by holding the AttrNS by prefix, or null for default.
-	Each time a new definition is encountered a new NameSpaceSet will be stacked.
+    Each time a new definition is encountered a new NameSpaceSet will be stacked.
 */
 class  NameSpaceSet
 {
 version(GC_STATS)
 {
-	mixin GC_statistics;
-	static this()
-	{
-		setStatsId(typeid(typeof(this)).toString());
-	}
+    mixin GC_statistics;
+    static this()
+    {
+        setStatsId(typeid(typeof(this)).toString());
+    }
 }
 
-	alias AttrNS[XmlString] AttrNSMap;
+    alias AttrNS[XmlString] AttrNSMap;
 
-    AttrNSMap		nsdefs_;	 // namespaces defined by <id> or null for default
+    AttrNSMap       nsdefs_;     // namespaces defined by <id> or null for default
 
     /// construct
     this()
     {
-		version(GC_STATS)
-			gcStatsSum.inc();
+        version(GC_STATS)
+            gcStatsSum.inc();
     }
     ~this()
     {
-		version(GC_STATS)
-			gcStatsSum.dec();
+        version(GC_STATS)
+            gcStatsSum.dec();
     }
-	void explode()
-	{
-		if (nsdefs_ !is null)
-		{
-			foreach(k ; nsdefs_.byKey)
-			{
-				nsdefs_.remove(k);
-			}
-			nsdefs_ = null;
-		}
-	}
+    void explode()
+    {
+        if (nsdefs_ !is null)
+        {
+            foreach(k ; nsdefs_.byKey)
+            {
+                nsdefs_.remove(k);
+            }
+            nsdefs_ = null;
+        }
+    }
 
     /// return attribute holding URI for prefix
     AttrNS getAttrNS(XmlString nsprefix)
@@ -3182,82 +3205,82 @@ AttributeMap toAttributeMap(Element e)
         for(uintptr_t i = 0; i < atmap.getLength; i++)
         {
             Attr atnode = cast(Attr)atmap.item(i);
-			result.push(atnode.getName(),atnode.getValue());
+            result.push(atnode.getName(),atnode.getValue());
         }
     }
     return result;
 }
 
-	intptr_t splitNameSpace(XmlString name, out XmlString nmSpace, out XmlString local)
-	{
-		intptr_t sepct = 0;
+    intptr_t splitNameSpace(XmlString name, out XmlString nmSpace, out XmlString local)
+    {
+        intptr_t sepct = 0;
 
-		auto npos = std.string.indexOf(name, ':');
+        auto npos = std.string.indexOf(name, ':');
 
-		if (npos >= 0)
-		{
-			sepct++;
-			nmSpace = name[0 .. npos];
-			local = name[npos+1 .. $];
-			if (local.length > 0)
-			{
-				auto temp = local;
-				npos = std.string.indexOf(temp,':');
-				if (npos >= 0)
-				{
-					sepct++;  // 2 is already too many
-					//temp = temp[npos+1 .. $];
-					//npos = indexOf(temp,':');
-				}
-			}
-		}
-		else
-		{
-			local = name;
-		}
-		return sepct;
-	}
+        if (npos >= 0)
+        {
+            sepct++;
+            nmSpace = name[0 .. npos];
+            local = name[npos+1 .. $];
+            if (local.length > 0)
+            {
+                auto temp = local;
+                npos = std.string.indexOf(temp,':');
+                if (npos >= 0)
+                {
+                    sepct++;  // 2 is already too many
+                    //temp = temp[npos+1 .. $];
+                    //npos = indexOf(temp,':');
+                }
+            }
+        }
+        else
+        {
+            local = name;
+        }
+        return sepct;
+    }
 
-	struct ChildElementRange
-	{
-	private:
-		Element		parent_;
-		Element		e_;
+    struct ChildElementRange
+    {
+    private:
+        Node        parent_;
+        Element e_;
 
-		Element nextElement(Node n)
-		{
-			while(n !is null)
-			{
- 				auto test = cast(Element) n;
+        Element nextElement(Node n)
+        {
+            while(n !is null)
+            {
+                auto test = cast(Element) n;
                 if (test !is null)
                 {
                     return test;
                 }
                 n = n.getNextSibling();
-			}
-			return null;
-		}
-	public:
-		this(Element parent)
-		{
-			parent_ = parent;
-			e_ = nextElement(parent_.getFirstChild());
-		}
+            }
+            return null;
+        }
+    public:
+        this(Node parent)
+        {
+            parent_ = parent;
+            e_ = nextElement(parent_.getFirstChild());
+        }
 
-		@property bool empty()
-		{
-			return e_ is null;
-		}
+        @property bool empty()
+        {
+            return e_ is null;
+        }
 
-		@property Element front()
-		{
-			return e_;
-		}
+        @property Element front()
+        {
+            return e_;
+        }
 
-		void popFront()
-		{
-			e_ = nextElement(e_.getNextSibling());
-		}
+        void popFront()
+        {
+            e_ = nextElement(e_.getNextSibling());
+        }
 
         int opApply(scope int delegate(Element) dg)
         {
@@ -3286,36 +3309,36 @@ AttributeMap toAttributeMap(Element e)
             return result;
         }
 
-	}
+    }
     struct ChildNodeRange
-	{
-	private:
-		Node		node_;
-		Element		parent_;
-	public:
-		this(Element parent)
-		{
+    {
+    private:
+        Node        node_;
+        Element     parent_;
+    public:
+        this(Element parent)
+        {
             parent_ = parent;
-			node_ = parent.getFirstChild();
-		}
+            node_ = parent.getFirstChild();
+        }
 
-		@property bool empty()
-		{
-			return node_ is null;
-		}
+        @property bool empty()
+        {
+            return node_ is null;
+        }
 
-		@property Node front()
-		{
-			return node_;
-		}
+        @property Node front()
+        {
+            return node_;
+        }
 
-		void popFront()
-		{
-			if(node_ !is null)
-			{
-				node_ = node_.getNextSibling();
-			}
-		}
+        void popFront()
+        {
+            if(node_ !is null)
+            {
+                node_ = node_.getNextSibling();
+            }
+        }
 
         int opApply(scope int delegate(Node) dg)
         {
@@ -3344,155 +3367,155 @@ AttributeMap toAttributeMap(Element e)
             return result;
         }
     }
-	struct DOMVisitor
-	{
+    struct DOMVisitor
+    {
 
-		private
-		{
-			Element		parent_;	// parent element
-			Node		node_;		// if equals parent, then start or end of element
-			int			depth_;		// element depth of parent
-			bool		isElement_; // true if node is element
-			NodeType	ntype_;
-		}
+        private
+        {
+            Element     parent_;    // parent element
+            Node        node_;      // if equals parent, then start or end of element
+            int         depth_;     // element depth of parent
+            bool        isElement_; // true if node is element
+            NodeType    ntype_;
+        }
 
-		/// The element whose children are being visited
-		@property Element element()
-		{
-			return parent_;
-		}
+        /// The element whose children are being visited
+        @property Element element()
+        {
+            return parent_;
+        }
 
-		private void checkStartElement()
-		{
-			ntype_ = node_.getNodeType();
-			if (ntype_ == NodeType.Element_node)
-			{
-				depth_++;
-				parent_ = cast(Element) node_;
-				isElement_ = true;
-			}
-		}
+        private void checkStartElement()
+        {
+            ntype_ = node_.getNodeType();
+            if (ntype_ == NodeType.Element_node)
+            {
+                depth_++;
+                parent_ = cast(Element) node_;
+                isElement_ = true;
+            }
+        }
 
-		private void doEndElement()
-		{
-			if (depth_ == 0)
-			{
-				node_ = null;
-			}
-			else
-			{
-				depth_--;
-				ntype_ = NodeType.Element_node;
-				node_ = parent_;
-				isElement_ = false;
-			}
+        private void doEndElement()
+        {
+            if (depth_ == 0)
+            {
+                node_ = null;
+            }
+            else
+            {
+                depth_--;
+                ntype_ = NodeType.Element_node;
+                node_ = parent_;
+                isElement_ = false;
+            }
 
-		}
+        }
 
-		/// Current node is an element
-		@property bool isElement()
-		{
-			return isElement_;
-		}
+        /// Current node is an element
+        @property bool isElement()
+        {
+            return isElement_;
+        }
 
-		/// NodeType of current node
-		@property NodeType nodeType()
-		{
-			return ntype_;
-		}
+        /// NodeType of current node
+        @property NodeType nodeType()
+        {
+            return ntype_;
+        }
 
-		/** Indicate travel back up to next sibling of this element,
-		without traversing any more of its subtree
-		*/
-		void doneElement()
-		{
-			doEndElement();
-		}
+        /** Indicate travel back up to next sibling of this element,
+        without traversing any more of its subtree
+        */
+        void doneElement()
+        {
+            doEndElement();
+        }
 
-		/** Set the current Element and its depth.
-		Depth zero is the depth at which exit will happen for the element.
-		If this is the parent element of all the elements to scan, then 0.
-		If this was the first of many siblings, then 1 so that exit depth is 0 at parent.
-		*/
+        /** Set the current Element and its depth.
+        Depth zero is the depth at which exit will happen for the element.
+        If this is the parent element of all the elements to scan, then 0.
+        If this was the first of many siblings, then 1 so that exit depth is 0 at parent.
+        */
 
-		void startElement(Element e, int elemDepth = 0)
-		{
-			if (elemDepth < 0)
-				elemDepth = 0;
-			parent_ = e;
-			node_ = e;
-			depth_ = elemDepth;
-			isElement_ = true;
-			ntype_ = NodeType.Element_node;
-		}
+        void startElement(Element e, int elemDepth = 0)
+        {
+            if (elemDepth < 0)
+                elemDepth = 0;
+            parent_ = e;
+            node_ = e;
+            depth_ = elemDepth;
+            isElement_ = true;
+            ntype_ = NodeType.Element_node;
+        }
 
 
-		/// go to the next node, try children of current element first (depth first)
-		bool nextNode()
-		{
-			if (ntype_ == NodeType.Element_node)
-			{
-				if (isElement_)
-				{
-					isElement_ = false;
-					node_ = parent_.getFirstChild();
-					if (node_ is null)
-					{
-						// end of element
-						doEndElement();
-					}
-					else
-						checkStartElement();
-				}
-				else   // have done end element
-				{
-					Node next = node_.getNextSibling();
-					if (next !is null)
-					{
-						node_ = next;
-						checkStartElement();
-					}
-					else
-					{
-						if (depth_ == 0)
-							return false;
-						depth_--;
-						next = node_.getParentNode();
-						if (next !is null)
-						{
-							parent_ = cast(Element) next;
-							next = next.getNextSibling();
-							if (next !is null)
-							{
-								node_ = next;
-								checkStartElement();
-							}
-							else
-							{
-								doEndElement();
-							}
-						}
-						else
-							return false;
-					}
-				}
-			}
-			else
-			{
-				Node next2 = node_.getNextSibling();
-				if (next2 is null)
-				{
-					parent_ = cast(Element) node_.getParentNode();
-					doEndElement();
-				}
-				else
-				{
-					node_ = next2;
-					checkStartElement();
-				}
-			}
-			return (node_ !is null);
-		}
-	}
+        /// go to the next node, try children of current element first (depth first)
+        bool nextNode()
+        {
+            if (ntype_ == NodeType.Element_node)
+            {
+                if (isElement_)
+                {
+                    isElement_ = false;
+                    node_ = parent_.getFirstChild();
+                    if (node_ is null)
+                    {
+                        // end of element
+                        doEndElement();
+                    }
+                    else
+                        checkStartElement();
+                }
+                else   // have done end element
+                {
+                    Node next = node_.getNextSibling();
+                    if (next !is null)
+                    {
+                        node_ = next;
+                        checkStartElement();
+                    }
+                    else
+                    {
+                        if (depth_ == 0)
+                            return false;
+                        depth_--;
+                        next = node_.getParentNode();
+                        if (next !is null)
+                        {
+                            parent_ = cast(Element) next;
+                            next = next.getNextSibling();
+                            if (next !is null)
+                            {
+                                node_ = next;
+                                checkStartElement();
+                            }
+                            else
+                            {
+                                doEndElement();
+                            }
+                        }
+                        else
+                            return false;
+                    }
+                }
+            }
+            else
+            {
+                Node next2 = node_.getNextSibling();
+                if (next2 is null)
+                {
+                    parent_ = cast(Element) node_.getParentNode();
+                    doEndElement();
+                }
+                else
+                {
+                    node_ = next2;
+                    checkStartElement();
+                }
+            }
+            return (node_ !is null);
+        }
+    }
 }//End template XMLDom
 

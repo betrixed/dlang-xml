@@ -49,6 +49,7 @@ class XmlParser(T)  {
 		bool				isStandalone_;
 		bool				namespaceAware_;
 		bool				normalizeAttributes_;
+		bool                useEntityRef_ = false; // new
 		bool				inDTD_;
 		bool                isHTML_; // relax some rules for HTML
 		bool				isEntity;
@@ -57,6 +58,7 @@ class XmlParser(T)  {
 		bool				hasStandalone;
 		bool				hasEncoding;
 		bool				inCharData;
+		bool				entityRefSet_; // reminder for doContent rentry
 		bool				eventMode_; // results by events
 
 		BBCount				bbct;
@@ -1269,7 +1271,7 @@ class XmlParser(T)  {
 			}
 			catch(InputBlockError ex)
 			{
-                errors_.pushError(ex.toString(),cast(XmlErrorLevel) ex.level);
+                errors_.pushError(ex.msg,cast(XmlErrorLevel) ex.level);
 			}
 			catch(Exception ex)
 			{
@@ -1477,6 +1479,22 @@ class XmlParser(T)  {
 			assert(0);
 		}
 
+		void returnEntityRef()
+		{
+			// encountered non-content character, return content block
+			itemCount++;
+			with(results_)
+			{
+				eventId = SAX.XI_ENTITY_REF;
+                		data = tag_;
+				attributes.reset();
+			}
+			tag_ = null;   // this alias not needed now
+			if (eventMode_)
+				events_.entityRef(results_);
+			return;
+		}
+
 		void returnTextContent()
 		{
 			// encountered non-content character, return content block
@@ -1484,15 +1502,13 @@ class XmlParser(T)  {
 			with(results_)
 			{
 				eventId = SAX.TEXT;
-					//data = bufContent_.data.idup;
-                data = xmlt!T.data(bufContent_).idup;
-
+                		data = xmlt!T.data(bufContent_).idup;
 				attributes.reset();
 			}
 			if (eventMode_)
 				events_.text(results_);
 			//bufContent_.length = 0;
-            xmlt!T.reset(bufContent_);
+            		xmlt!T.reset(bufContent_);
 			//bufContent_.shrinkTo(0);
 			inCharData = false;
 			return;
@@ -1505,6 +1521,12 @@ class XmlParser(T)  {
 
 		final void doContent()
 		{
+			if (entityRefSet_)
+			{
+				entityRefSet_ = false;
+				returnEntityRef();
+				return; // leave everything else untouched
+			}
 			state_ = PState.P_CONTENT;
 			//bufContent_.shrinkTo(0);
 			xmlt!T.reset(bufContent_);
@@ -1598,6 +1620,21 @@ class XmlParser(T)  {
 								inCharData = true;
 								continue;
 							}
+							if (useEntityRef_ == true)
+							{
+								/* Officially an entity reference node shall be created */
+								if (inCharData)
+								{
+									entityRefSet_ = true; // do it next call
+									returnTextContent(); // return content so far
+									return; // next iteration
+								}
+								// Do it this call
+								returnEntityRef();
+								return;
+
+							}
+
 							if (!pushEntity(tag_, false))
 							{
 								/// Generate character data, then Entity, then proceed again with content.
@@ -1919,6 +1956,9 @@ class XmlParser(T)  {
 					filterAlwaysOff();
 				}
 				break;
+            case "entities":
+                useEntityRef_ = n.get!bool;
+                break;
 			case "edition":
 				{
 					maxEdition = n.get!uint;
@@ -2032,19 +2072,24 @@ class XmlParser(T)  {
 				stateDg_();
 			}
 		}
+		catch(InputBlockError ib)
+		{
+            throw stageError(ib.toString(), XmlErrorLevel.FATAL);
+		}
+        catch(CharSequenceError se)
+		{
+			throw stageError(se.msg,XmlErrorLevel.ERROR);
+		}
+
 		catch(XmlError x)
 		{
 			throw x;
-		}
-		catch(CharSequenceError se)
-		{
-			throw stageError(se.msg,XmlErrorLevel.ERROR);
 		}
 		catch(Exception e)
 		{
 			throw stageError(e.msg);
 		}
-	}
+    }
 
 	/// do single event and return
 	void parseOne()
@@ -2181,9 +2226,11 @@ class XmlParser(T)  {
         }
 
 	}
+    // called from doContent when isAttribute is false
 
-    bool pushEntity(const(T)[] ename, bool isAttribute)
+    bool pushEntity(immutable(T)[] ename, bool isAttribute)
     {
+
         EntityData ed = getEntityData(ename, isAttribute);
 
         if (ed !is null)
@@ -2231,22 +2278,13 @@ class XmlParser(T)  {
         StringSet eset;
 
         int reftype = RefTagType.UNKNOWN_REF;
-		if (! deriveEntityContent(ge, eset, reftype))
+	 if (! deriveEntityContent(ge, eset, reftype))
             return null;
-		/*
-        if (!lookupReference(ge.name_, eset, value, reftype))
-        {
-            doNotWellFormed(text("Error in entity lookup: ", ge.name_));
-        }
-		*/
 
         if (reftype==RefTagType.NOTATION_REF)
         {
             throw errors_.makeException(text("Reference to unparsed entity ",dname));
         }
-        /*if(isAttribute && this.isStandalone_ && reftype==RefTagType.SYSTEM_REF)
-            throw errors_.makeException("External entity in attribute of standalone document");*/
-
         return ge;
 	}
 
@@ -2297,7 +2335,7 @@ class XmlParser(T)  {
 		charEntity[entityName] = value;
 	}
 
-	bool isHtml() @property
+	bool isHtml() const @property
 	{
 		return isHTML_;
 	}
@@ -2314,17 +2352,22 @@ class XmlParser(T)  {
     {
         validate_ = val;
     }
-    bool isStandalone() const
+    bool isStandalone() const @property
     {
         return isStandalone_;
     }
-    bool namespaces() const
+    bool namespaces() const @property
     {
         return namespaceAware_;
     }
-    void namespaces(bool doNamespaces)
+    void namespaces(bool doNamespaces) @property
     {
         namespaceAware_ = doNamespaces;
+    }
+
+    bool useEntityRef() const @property
+    {
+        return useEntityRef_;
     }
     /// Read from current input context, replacing character references
     protected bool doReplaceCharRef(ref XmlBuffer app)
@@ -2521,6 +2564,7 @@ class XmlParser(T)  {
 					{
 						string evalue;
 						EntityData ed = getEntityData(entityName, true);
+
 						if (ed !is null)
 						{
 							if (!ed.isInternal_ && this.isStandalone_)
@@ -4221,6 +4265,8 @@ class XmlParser(T)  {
 
 		return ep;
 	}
+
+
 	// Set up a new parser, using same IXMLEvents. Use current Xml version
     bool readSystemEntity(EntityData entity)
     {

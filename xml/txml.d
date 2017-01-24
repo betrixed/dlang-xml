@@ -64,7 +64,7 @@ enum SAX {
 	DOC_END,  //8  - is a usefull binary size for an array of delegates
 	DOC_TYPE,	/// DTD parse results contained in doctype as DtdValidate.
 	XI_NOTATION,
-	XI_ENTITY,
+	XI_ENTITY_REF,
 	XI_OTHER,		/// internal DOCTYPE declarations
 	RET_NULL,  /// nothing returned
 	ENUM_LENGTH, /// size of array to hold all the other values
@@ -270,7 +270,7 @@ template xmlt(T) {
     alias XmlString[dchar] CharEntityMap;
 	// Its a class so can pass it around as pointer
 	class XmlEvent {
-		SAX				eventId;
+		SAX			eventId;
 		XmlString		data;
 		AttributeMap	attributes;
 		version(GC_STATS)
@@ -386,6 +386,10 @@ template xmlt(T) {
 		/// just return the entity name, not decoded
 
 		void setErrorHandler(IXmlErrorHandler eh);
+
+		// new Entity processing
+
+		void entityRef(const XmlEvent s);
 	}
 
 	class NullDocHandler :  IXmlDocHandler {
@@ -410,6 +414,9 @@ template xmlt(T) {
 		void setErrorHandler(IXmlErrorHandler eh){
 			errorHandler_ = eh;
 		}
+
+
+		void entityRef(const XmlEvent s){}
 		private:
 			IXmlErrorHandler errorHandler_;
 	}

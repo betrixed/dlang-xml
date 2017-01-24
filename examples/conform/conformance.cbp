@@ -13,7 +13,7 @@
 				<Option object_output="Debug/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
-				<Option parameters="--input ../../xmlconf/xmlconf.xml --test rmt-ns11-003" />
+				<Option parameters="--input ../../xmlconf/xmlconf.xml --test rmt-001" />
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />

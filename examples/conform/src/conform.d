@@ -79,7 +79,7 @@ void writeUsage()
         filepath -   - A special XML file in a w3c XML tests folder
         test  -      - Run only a particular test id
         --skipfail -   - If run all tests do not stop on first fail
-		summary -    - Do not print each test id - summary only
+		--verbose -    -
 		namespaceoff - Namespace aware turned off -
 		validate -   - turn on validation`;
 
@@ -115,8 +115,8 @@ int TestType(T)(string[] args)
 			case "--namespaceoff":
 				tests.namespaceAware = false;
 				break;
-			case "--summary":
-				tests.summary = true;
+			case "--verbose":
+				tests.summary = false;
 				break;
 
 			case "--skipfail":

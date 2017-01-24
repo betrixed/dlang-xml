@@ -720,14 +720,15 @@ struct ByteOrderRegistry
 
     __gshared static this()
     {
+
         noMark = new ByteOrderMark(DecoderKey("UTF-8",null), [], endian, 1);
         registerBOM(new ByteOrderMark(DecoderKey("UTF-8",null), [0xEF, 0xBB, 0xBF], endian, 1));
         registerBOM(new ByteOrderMark(DecoderKey("UTF-16","LE"), [0xFF, 0xFE], Endian.littleEndian, 2));
         registerBOM(new ByteOrderMark(DecoderKey("UTF-16","BE"), [0xFE, 0xFF], Endian.bigEndian, 2));
         registerBOM(new ByteOrderMark(DecoderKey("UTF-32","LE"), [0xFF, 0xFE, 0x00, 0x00], Endian.littleEndian, 4));
         registerBOM(new ByteOrderMark(DecoderKey("UTF-32","BE"), [0x00, 0x00, 0xFE, 0xFF], Endian.bigEndian,4));
-
     }
+
 
     /// add  ByteOrderMark signatures
     static void registerBOM(ByteOrderMark bome)

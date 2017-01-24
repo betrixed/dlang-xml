@@ -25,10 +25,10 @@ import std.uni;
 class InputBlockError : Exception {
 public:
     IBLevel  level_;
-	this(string msg, IBLevel level = IBLevel.ERROR )
-	{
+    this(string msg, IBLevel level = IBLevel.ERROR,
+        string file = __FILE__, size_t line = __LINE__) {
+        super(msg, file, line);
         level_ = level;
-        super(msg);
     }
     IBLevel level() @property const
     {
@@ -110,6 +110,10 @@ class InputBlock(T) : DCharProvider
             return false;
         actual_ = s_.rawRead(data_);
         eof_ = s_.eof;
+        if (eof_)
+        {
+            s_.close();
+        }
         if (actual_.length > 0)
             return true;
         actual_ = null;
@@ -272,8 +276,8 @@ class RecodeInput : InputRange!dchar
 
         fileName_ = buildNormalizedPath(absolutePath(f));
 
-        s_ = File(fileName_,"r");
-        bom_ = readBOM(s_, spill, isEOF);
+        auto finput = File(fileName_,"r");
+        bom_ = readBOM(finput, spill, isEOF);
         if (isEOF)
         {
             empty_ = true;
@@ -300,10 +304,10 @@ class RecodeInput : InputRange!dchar
             {
                 if (spill.length > 0)
                 {
-                    s_.seek(bom_.bom.length);
+                    finput.seek(bom_.bom.length);
                 }
                 filler_.setBom(bom_);
-                filler_.setFile(s_);
+                filler_.setFile(finput);
                 popFront();
             }
         }
@@ -441,8 +445,17 @@ class RecodeInput : InputRange!dchar
             if( bom_.key.codeName == bomKey)
                 return true;
             auto bother = ByteOrderRegistry.findBOM(bomKey);
-            if ((bother !is null) &&  (bother.charSize != bom_.charSize))
-                throw new InputBlockError(text("Incompatible encoding ", encoding),IBLevel.FATAL);
+            if (bother !is null)
+            {
+                if (bother.charSize != bom_.charSize)
+                {
+                    throw new InputBlockError(text("Incompatible encoding ", encoding),IBLevel.FATAL);
+                }
+            }
+            else {
+                if (bom_.bom.length > 0)
+                    throw new InputBlockError(text("BOM Incompatible encoding ",bom_.key, " - ", encoding),IBLevel.FATAL);
+            }
         }
         if (filler_.setEncoding(encoding))
         {
@@ -450,7 +463,6 @@ class RecodeInput : InputRange!dchar
             return true;
         }
         else {
-
             throw new InputBlockError(text("Encoding '", encoding, "' is not supported"));
         }
     }
@@ -460,7 +472,6 @@ class RecodeInput : InputRange!dchar
     dchar           front_;
     bool            empty_;
     DCharProvider   filler_;
-    File            s_;
     string          fileName_;
     ByteOrderMark   bom_;
     /* ensure buffer size increases after

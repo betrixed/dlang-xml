@@ -9,6 +9,7 @@ import xml.util.jisx0208;
 import std.stdint, std.path, std.stdio;
 import std.algorithm;
 
+
 version(GC_STATS)
 {
 	import texi.gcstats;
@@ -17,9 +18,16 @@ import std.file, std.conv, std.variant, std.string;
 template XMLTESTS(T)
 {
 	alias xmlt!(T).XmlString  XmlString;
+    alias XMLDOM!T.NamedNodeMap NamedNodeMap;
+    alias XMLDOM!T.Entity Entity;
+    alias XMLDOM!T.EntityReference EntityReference;
+    alias XMLDOM!T.DocumentFragment DocumentFragment;
+    alias XMLDOM!T.DocumentType DocumentType;
+	alias XMLDOM!T.Node			Node;
 
 	alias XMLDOM!(T).Element			Element;
 	alias XMLDOM!(T).ChildElementRange	ChildElementRange;
+	alias XMLDOM!(T).ChildNodeRange	    ChildNodeRange;
 
 	alias XMLDOM!(T).Document			Document;
 	alias XMLDOM!(T).DOMConfiguration	DOMConfiguration;
@@ -41,8 +49,8 @@ template XMLTESTS(T)
 		string		uri;
 		XmlString  namespace;
 		string  edition;
-		bool    passed;
-		bool    summary;
+		bool    passed = false;
+		bool    summary = true;
 
 		void failMessage()
 		{
@@ -60,7 +68,7 @@ template XMLTESTS(T)
 	}
 
 	class Tests {
-		bool summary;
+		bool summary = true;
 		bool validate;
 		bool namespaceAware = true;
 		bool xmlversion11;
@@ -145,6 +153,8 @@ template XMLTESTS(T)
 			//Variant v = cast(DOMErrorHandler) peh;
 			config.setParameter("error-handler",Variant(cast(DOMErrorHandler) peh));
 			config.setParameter("namespaces", Variant(false));
+			// don't expand entity nodes, store them in the DocType Node
+            config.setParameter("entities", Variant(true));
 
 			//if (!std.path.isabs(dirName)) // should work either way
 			//	dirName = rel2abs(dirName);
@@ -166,11 +176,13 @@ template XMLTESTS(T)
 
 
 			intptr_t orderNum = 0;
+            DocumentType dtd = doc.getDoctype();
+            NamedNodeMap entityMap = dtd.getEntities();
 
 			foreach( Element e; ChildElementRange(doc.getDocumentElement))
 			{
 				if (e.getNodeName() == "TESTCASES")
-                    testCasesElement(e,orderNum);
+                    testCasesElement(entityMap, e,orderNum);
 			}
 
             writeln(orderNum, " total tests");
@@ -262,7 +274,7 @@ template XMLTESTS(T)
 
 		}
 
-		void testCasesElement(Element cases, ref intptr_t orderNum)
+		void testCasesElement(NamedNodeMap entityMap, Element cases, ref intptr_t orderNum)
 		{
 			// extract base directory, then the test cases
 			auto baseDir = cases.getAttribute("xml:base");
@@ -273,6 +285,9 @@ template XMLTESTS(T)
 				if (baseDir[slen] == '\\' || baseDir[slen] == '/')
 					baseDir.length = slen;
 			}
+            // baseDir is wrong in one instance -"eduni/namespaces/misc/"
+
+            // use parser for EntityRef node instead
 
 			void testElement(Element te)
 			{
@@ -296,16 +311,38 @@ template XMLTESTS(T)
                     }
                 }
 			}
-			foreach(Element e; ChildElementRange(cases))
+
+			foreach(Node n; ChildNodeRange(cases))
 			{
-                auto tag = e.getNodeName();
-                if (tag == "TESTCASES")
+                if (n.getNodeType() == NodeType.Entity_Reference_node)
                 {
-                    subTestCases(e);
-                }
-                else if (tag == "TEST")
-                {
-                    testElement(e);
+                    auto ename = n.getNodeName();
+                    auto enode = entityMap.getNamedItem(ename);
+                    auto entity = cast(Entity) enode;
+                    if (entity)
+                    {
+                        // it was the SystemID
+                        baseDir = entity.getNodeValue();
+                        // strip off the file name
+                        baseDir = dirName(baseDir);
+
+                        // get its DOM Tree fragment
+                        DocumentFragment df = entity.getFragment();
+                        foreach(Element e; ChildElementRange(df))
+                        {
+                            auto tag = e.getNodeName();
+                            if (tag == "TESTCASES")
+                            {
+                                subTestCases(e);
+                            }
+                            else if (tag == "TEST")
+                            {
+                                testElement(e);
+                            }
+                        }
+
+                    }
+
                 }
 			}
 		}
@@ -533,10 +570,10 @@ template XMLTESTS(T)
 
 			config.setParameter(xmlNamespaces,Variant(vbal) );
 			config.setParameter("namespace-declarations",Variant(vbal));
-
 			config.setParameter("error-handler",Variant( cast(DOMErrorHandler) result) );
 			config.setParameter("edition", Variant( maxEdition() ) );
 			config.setParameter("canonical-form",Variant(true)); // flag for output hint?
+			//config.setParameter("entities",Variant(false)); // flag for output hint?
 			if (t.summary)
 			{
 				writeln(t.id);
@@ -564,12 +601,8 @@ template XMLTESTS(T)
 				}
 			}
 			else {
-				auto elist = x.errorList();
-				if (elist.length > 0)
-				{
-					foreach(i,s ; elist)
-						writefln("%s: %s", i+1, s);
-				}
+				//auto elist = x.errorList();
+				writeln(x.msg);
 			}
 			destroy(x);
 		}
@@ -580,7 +613,7 @@ template XMLTESTS(T)
 			if (!t.summary)
 				writefln("Non parse exception %s", ex.toString());
 			else
-				writeln("General Exception");
+				writeln("General Exception", ex.msg);
 			result.domErrorLevel = DOMError.SEVERITY_FATAL_ERROR;
 			result.hadError = true;
 		}

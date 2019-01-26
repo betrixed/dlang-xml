@@ -11,7 +11,7 @@
 				<Option object_output="Debug/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
-				<Option parameters="--input ../../../xmlconf/xmlconf.xml --summary --test not-wf-sa-020" />
+				<Option parameters="--input ../../../xmlconf/xmlconf.xml --summary" />
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />
@@ -25,7 +25,7 @@
 				<Option compiler="dmd" />
 				<Compiler>
 					<Add option="-O" />
-					<Add option="-I../../../ -version=BUF_NATIVE" />
+					<Add option="-I../../../  -I../../../examples/conform/src/" />
 				</Compiler>
 			</Target>
 		</Build>

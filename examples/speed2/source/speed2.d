@@ -5,16 +5,12 @@ Trade offs include, the number of function calls and call-backs, size of the cha
 */
 
 import std.stdint;
-import std.datetime;
+import core.time: Duration;
+import std.datetime.stopwatch : benchmark, StopWatch;
+
 import std.file;
 import xml.util.buffer;
-version(GC_STATS)
-{
-	import xml.util.gcstats;
-	import xml.std.xmlSlicer;
-}else {
-	import std.xml;
-}
+
 //import xml.std.xmlSlicer;
 
 import std.stdio;
@@ -22,16 +18,16 @@ import core.memory;
 import std.random;
 import std.conv;
 import xml.util.bomstring;
-import xml.xmlAttribute;
+import xml.attribute;
 import std.container.array;
 import std.algorithm;
 import std.string;
 import std.range;
-import xml.textInput;
-import xml.xmlParser;
+import xml.input;
 import xml.txml;
 import xml.xmlLinkDom;
 import xml.xmlArrayDom;
+import xml.attribute;
 
 struct Book
 {
@@ -46,9 +42,12 @@ struct Book
 
 double timedSeconds(ref StopWatch sw)
 {
-    auto duration = sw.peek();
+    auto d = sw.peek();
+    // 100 ns hecto-nanoseconds 10^7
+    return d.total!"hnsecs" * 1e-7;
 
-    return duration.to!("seconds",double)();
+
+    //return duration.to!("seconds",double)();
 }
 
 void fullCollect()
@@ -56,73 +55,23 @@ void fullCollect()
 	GC.collect();
 	ulong created, deleted;
 
-	writeln("Enter to continue");
-	getchar();
+	writeln("Full collect done:
+          Enter to continue");
+	//getchar();
 }
 
 import std.file;
 
 void StdXmlRun( string input)
 {
-	// Check for well-formedness
-	debug {
-		// Very slow as throws and catches exceptions all over the place.
-	}
-	else {
-		//std.xml.check(input); // Very slow as throws and catches exceptions all over the place.
-	}
-    //std.xml.check(input);
-
+    import std.xml;
     // Make a DOM tree
-    auto doc = new Document(input);
+    auto doc = new std.xml.Document(input);
 }
 
 void simpleBookLoad(string s)
 {
-    // Check for well-formedness
-   check(s);
 
-    // Take it apart
-    Book[] books;
-
-    auto xml = new DocumentParser(s);
-    xml.onStartTag["book"] = (ElementParser xml)
-    {
-        Book book;
-        book.id = xml.tag.attr["id"];
-
-        xml.onEndTag["author"]       = (in Element e) { book.author      = e.text(); };
-        xml.onEndTag["title"]        = (in Element e) { book.title       = e.text(); };
-        xml.onEndTag["genre"]        = (in Element e) { book.genre       = e.text(); };
-        xml.onEndTag["price"]        = (in Element e) { book.price       = e.text(); };
-        xml.onEndTag["publish-date"] = (in Element e) { book.pubDate     = e.text(); };
-        xml.onEndTag["description"]  = (in Element e) { book.description = e.text(); };
-
-        xml.parse();
-
-        books ~= book;
-    };
-    xml.parse();
-
-    // Put it back together again;
-    auto doc = new Document(new Tag("catalog"));
-    foreach(book;books)
-    {
-        auto element = new Element("book");
-        element.tag.attr["id"] = book.id;
-
-        element ~= new Element("author",      book.author);
-        element ~= new Element("title",       book.title);
-        element ~= new Element("genre",       book.genre);
-        element ~= new Element("price",       book.price);
-        element ~= new Element("publish-date",book.pubDate);
-        element ~= new Element("description", book.description);
-
-        doc ~= element;
-    }
-
-    // Pretty-print it
-    writefln(join(doc.pretty(3),"\n"));
 }
 
 void testXmlInput(string s)
@@ -155,10 +104,20 @@ class SliceResults(T) : xmlt!T.NullDocHandler  {
 	}
 
 }
-void dxmlSliceThroughPut(T,S)(immutable(S)[] xml)
+
+void arrayDomPrint(S)(immutable(S)[] xml) {
+    auto d = new XMLArrayDom!S.Document();
+    XMLArrayDom!S.parseArrayDom!(S)(d, xml);
+
+    auto result = d.pretty(4);
+    foreach(a ; result) {
+        write(a);
+    }
+}
+void dxmlSliceThroughPut(S)(immutable(S)[] xml)
 {
-	auto dummy = new SliceResults!(S)();
-	dummy.parseSlice(xml);
+    auto d = new XMLArrayDom!S.Document();
+    XMLArrayDom!S.parseArrayDom!(S)(d, xml);
 }
 
 auto dxmlMakeDoc(T,S)(immutable(S)[] s)
@@ -233,9 +192,104 @@ double testNativeBuf(uintptr_t repeats, uintptr_t bsize)
 
 void testValidate(string s)
 {
-	check(s);
+    import std.xml;
+	std.xml.check(s);
 }
 
+void singleTest(string inputFile, uintptr_t runs, int testid)
+{
+    int bomMark = -1;
+    auto s = readFileBom!char(inputFile, bomMark);
+
+    enum uint numTests = 5;
+	double[numTests] sum;
+	double[numTests] sample;
+	string[numTests] names = ["std.xml",  "check",  "input",  "arrayDom",  "linkDom"];
+
+	//arrayDomPrint!char(s);
+
+    writeln("Run test id ", testid+1, " " , names[testid]);
+	sum[] = 0.0;
+	StopWatch sw;
+	const uint repeat_ct = 10;
+    uintptr_t i = 0;
+    for (uintptr_t rpt  = 1; rpt <= repeat_ct; rpt++)
+	{
+
+        switch(testid)
+        {
+
+            case 0:
+                sw.start();
+                for(i = 0;  i < runs; i++)
+                {
+                    StdXmlRun(s);
+                }
+                sw.stop();
+                sample[testid] = timedSeconds(sw);
+                break;
+            case 1:
+                sw.start();
+                for(i = 0;  i < runs; i++)
+                {
+                    testValidate(s);
+                    //test_throughput(s);
+                }
+                sw.stop();
+                sample[testid] = timedSeconds(sw);
+
+                break;
+
+            case 2:
+                sw.start();
+                for(i = 0;  i < runs; i++)
+                {
+                    testXmlInput(s);
+                }
+                sw.stop();
+                sample[testid] = timedSeconds(sw);
+                break;
+            case 3:
+                sw.start();
+                for(i = 0;  i < runs; i++)
+                {
+                    dxmlSliceThroughPut!(char)(s);
+                }
+                sw.stop();
+                sample[testid] = timedSeconds(sw);
+                break;
+            case 4:
+                sw.start();
+                for(i = 0;  i < runs; i++)
+                {
+                    dxmlLinkDom!(char,char)(s);
+                    //test_throughput(s);
+                }
+                sw.stop();
+                sample[testid] = timedSeconds(sw);
+                break;
+            case 5:
+                break;
+            default:
+                break;
+        }
+
+        sw.reset();
+
+
+        writef(" %6.3f", sample[testid]);
+
+		writeln(" ---");
+		sum[testid] += sample[testid];
+	}
+
+	sum[testid] /= repeat_ct;
+
+	writeln("averages: ", runs, " runs");
+	writefln(" %8s", names[testid]);
+    writefln(" %8.4f", sum[testid]);
+	writeln(" ---");
+}
 
 void runTests(string inputFile, uintptr_t runs)
 {
@@ -245,7 +299,7 @@ void runTests(string inputFile, uintptr_t runs)
 
 	simpleBookLoad(s);
 	testValidate(s);
-	fullCollect();
+	//fullCollect();
 
 	enum uint numTests = 5;
 	double[numTests] sum;
@@ -255,6 +309,12 @@ void runTests(string inputFile, uintptr_t runs)
 
 	sum[] = 0.0;
 
+	writeln(`
+ std.xml:       Parse to simple array dom without checking
+ check:         Run the verification code for std.xml
+ input:         Load the xml document with proper filtering
+ fullparser:    Use validating parser
+ linkdom:       Standard bidirectional linked node DOM`);
 	StopWatch sw;
 	double ms2 = 0;
 	writeln("\n 10 repeats., rotate sequence.");
@@ -309,7 +369,7 @@ void runTests(string inputFile, uintptr_t runs)
 					sw.start();
                     for(i = 0;  i < runs; i++)
                     {
-                        dxmlSliceThroughPut!(char,char)(s);
+                        dxmlSliceThroughPut!(char)(s);
                     }
                     sw.stop();
 					sample[startix] = timedSeconds(sw);
@@ -343,7 +403,7 @@ void runTests(string inputFile, uintptr_t runs)
 
 	double control = sum[$-1];
 	writeln("averages: ", runs, " runs");
-	writefln(" %8s %8s %8s %8s %8s %8s", "std.xml",  "check",  "input",  "slice2",  "linkdom", "handler");
+	writefln(" %8s %8s %8s %8s %8s %8s", "std.xml",  "check",  "input",  "arrayDom",  "linkDom", "handler");
 	foreach(v ; sum)
         writef(" %8.4f", v);
 	writeln(" ---");
@@ -357,9 +417,8 @@ void runTests(string inputFile, uintptr_t runs)
 
 void testAttribute()
 {
-	alias XMLAttribute!char		 attr_t;
-	alias attr_t.XmlAttribute     XmlAttribute;
-	alias attr_t.AttributeMap     AttributeMap;
+	alias xml.attribute.XmlAttribute!char     XmlAttribute;
+	alias xml.attribute.AttributeMap!char     AttributeMap;
 
 	AttributeMap map;
 
@@ -390,8 +449,8 @@ void makeArrayDom()
 void usage()
 {
 	writefln("Working directory is %s", getcwd());
-	writeln("speed.exe  --input <path to books.xml>	--runs <repetitions (default==100)>");
-	getchar();
+	write("speed.exe  --input <path to books.xml>");
+	writeln(" --test <1 - 5> --runs <repetitions (default==100)>");
 	return;
 }
 
@@ -410,6 +469,8 @@ void main(string[] argv)
     uintptr_t act = argv.length;
 
     uintptr_t i = 0;
+    int testid = 0;
+
     while (i < act)
     {
         string arg = argv[i++];
@@ -417,6 +478,8 @@ void main(string[] argv)
             inputFile = argv[i++];
         else if (arg == "--runs" && i < act)
             runs = to!(uint)(argv[i++]);
+        else if (arg == "--test" && i < act)
+            testid = to!(int)(argv[i++]);
     }
 
     if (inputFile.length == 0)
@@ -426,22 +489,33 @@ void main(string[] argv)
     }
     if (inputFile.length > 0)
     {
-        if (!exists(inputFile))
-        {
-            writeln("File not found : ", inputFile, "from ", getcwd());
-            usage();
-            return;
+        if (testid < 1) {
+            if (!exists(inputFile))
+            {
+                auto msg = format("%s not found : from dir %s", inputFile, getcwd());
+
+                writeln(msg);
+                usage();
+                return;
+            }
+            runTests(inputFile,runs);
         }
-
-		runTests(inputFile,runs);
-
+        else {
+            if (testid > 5) {
+                writeln("test number not between 1 and 5");
+                usage();
+                return;
+            }
+            singleTest(inputFile,runs, testid-1);
+        }
     }
+
 	//fullCollect();
 	version(GC_STATS)
 	{
         GC.collect();
 		GCStatsSum.AllStats();
-		getchar();
+		//getchar();
 		//GCStatsSum.AllStats();
 		//writeln("If some objects are still alive, try calling  methods.explode");
 		//version(TrackCount)
@@ -450,11 +524,12 @@ void main(string[] argv)
 
 	}
 	writeln("All done");
-	getchar();
+	//getchar();
 }
 
 void unit_test_1()
 {
+    import std.xml;
 
 	try
 	{
@@ -504,6 +579,8 @@ void unit_test_1()
 
 void unit_test_2()
 {
+    import std.xml;
+
     string s = q"EOS
 <?xml version="1.0" encoding="utf-8"?>
 <Tests><Test thing="What &amp; Up">What &amp; Up Second</Test></Tests>
@@ -523,6 +600,7 @@ EOS";
 
 void unit_test_3()
 {
+    import std.xml;
     string s = q"EOS
 <?xml version="1.0"?>
 <set>
@@ -544,6 +622,8 @@ EOS";
 
 void unit_test_4()
 {
+    import std.xml;
+
     string s = `<tag attr="&quot;value&gt;" />`;
     auto doc = new Document(s);
     assert(doc.toString() == s);

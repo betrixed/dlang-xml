@@ -2,9 +2,9 @@ module testSuite;
 
 import xml.util.buffer;
 import xml.dom.domt, xml.util.read, xml.txml;
-import xml.xmlError, xml.xmlParser, xml.xmlLinkDom;
+import xml.error, xml.parser, xml.xmlLinkDom;
 import xml.util.inputEncode;
-import xml.textInput;
+import xml.input;
 
 import std.stdint, std.path, std.stdio;
 import std.algorithm;
@@ -16,7 +16,7 @@ version(GC_STATS)
 import std.file, std.conv, std.variant, std.string;
 template XMLTESTS(T)
 {
-	alias xmlt!(T).XmlString  XmlString;
+	alias sxml!(T).XmlString  XmlString;
 
 	alias XMLDOM!(T).Element			Element;
 	alias XMLDOM!(T).Document			Document;
@@ -147,7 +147,7 @@ template XMLTESTS(T)
 			//	dirName = rel2abs(dirName);
 			try
 			{
-				parseXmlSliceFile(doc,path,true);
+				parseXmlFile(doc,path,true);
 			}
 			catch(XmlError pe)
 			{

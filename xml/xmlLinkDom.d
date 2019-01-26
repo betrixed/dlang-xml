@@ -1,20 +1,16 @@
 module xml.xmlLinkDom;
 
-import xml.txml, xml.xmlParser;
+import xml.txml, xml.parser;
+import xml.attribute;
 import xml.dom.domt;
-import xml.textInput, xml.xmlChar, xml.util.read;
-import xml.dom.dtdt, xml.xmlError;
+import xml.input, xml.isxml, xml.util.read;
+import xml.dtd, xml.error;
 
 import std.file, std.path;
 
 import std.string, std.stdint;
 import std.conv, std.algorithm, std.variant, std.array;
 import std.stdio;
-
-version(GC_STATS)
-{
-    import xml.util.gcstats;
-}
 
 // build up a structure of used tag nesting
 // debug = CheckNest
@@ -28,41 +24,19 @@ version(TagNesting)
 
 import xml.util.bomstring;
 
-
-
-
-
-
-
-/// check that the URI begins with a scheme name
-/// scheme        = alpha *( alpha | digit | "+" | "-" | "." )
-
-
-
-class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
+class DXmlDomBuild(T)
 {
-    version(GC_STATS)
-    {
-        mixin GC_statistics;
-        static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-    }
-	alias xmlt!T.XmlString XmlString;
-	alias xmlt!T.xmlNamespaceURI	xmlNamespaceURI;
-	alias xmlt!T.xmlnsURI			xmlnsURI;
+	alias sxml!T.XmlString XmlString;
+	alias sxml!T.xmlNamespaceURI	xmlNamespaceURI;
+	alias sxml!T.xmlnsURI			xmlnsURI;
 
-	alias xmlt!T.XmlBuffer	XmlBuffer;
-	alias xmlt!T.XmlEvent XmlEvent;
-	alias xmlt!T.IXmlErrorHandler IXmlErrorHandler;
-
+	alias sxml!T.XmlBuffer	XmlBuffer;
 
 	alias XmlParser!T		Parser;
 	alias XMLDOM!T.Node		Node;
 	alias XMLDOM!T.ChildNode ChildNode;
 
-	alias XMLDOM!T.AttributeMap		AttributeMap;
+	alias xml.attribute.AttributeMap!T	AttributeMap;
 	alias XMLDOM!T.AttrNS	AttrNS;
 	alias XMLDOM!T.Element	Element;
 	alias XMLDOM!T.ElementNS	ElementNS;
@@ -73,12 +47,13 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	alias XMLDOM!(T).DOMConfiguration DOMConfiguration;
 	alias XMLDOM!T.DocumentType DocumentType;
 
-	alias XMLDTD!T.IDValidate IDValidate;
-	alias XMLDTD!T.DocTypeData DocTypeData;
-	alias XMLDTD!T.AttributeDef AttributeDef;
-	alias XMLDTD!T.AttributeList AttributeList;
-	alias XMLDTD!T.ElementDef  ElementDef;
-	alias XMLDTD!T.EntityData EntityData;
+	alias xml.dtd.IDValidate!T IDValidate;
+	alias xml.dtd.DocTypeData!T DocTypeData;
+	alias xml.dtd.AttributeDef!T  AttributeDef;
+	alias xml.dtd.AttributeList!T  AttributeList;
+	alias xml.dtd.ElementDef!T   ElementDef;
+	alias xml.entity.EntityData!T EntityData;
+
 	alias XMLDTD!T.isNameSpaceIRI	isNameSpaceIRI;
 	alias XMLDTD!T.isNameSpaceURI	isNameSpaceURI;
 
@@ -99,6 +74,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		addSystemPath(normalizedDirName(srcPath));
 		auto sf = new XmlFileReader(File(srcPath,"r"));
 		parser_.fillSource = sf;
+
 		parser_.parseAll();
 	}
 
@@ -125,14 +101,6 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		parser_.initSource(src);
 		parser_.parseAll();
 	}
-	// read the data in a block, translate if necessary to T.
-	void parseSliceFile(Document d, string srcPath)
-	{
-		doc_ = d;
-		setFromDocument();
-		parser_.sliceFile(srcPath);
-		parser_.parseAll();
-	}
 
 	Document						doc_;
 	DocumentType					dtdNode_; // what the document keeps around
@@ -152,42 +120,60 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 
 	string					lastCloseTag_;
 	AttributeMap			attrMap_;
-	//ImmuteAlloc!(T,true)	stringAlloc_;
-
-
 	Parser					parser_;
-	string[]     			errors_;
-	XmlErrorLevel			maxError_;
-
-	~this()
-	{
-		version(GC_STATS)
-			gcStatsSum.dec();
-	}
+	XmlErrors               errors;
 
 	this()
 	{
-        version(GC_STATS)
-        {
-            version(GC_STATS)
-                gcStatsSum.inc();
-        }
-
         parser_ = new Parser();
-        parser_.setErrorHandler(this);
-        parser_.docInterface = this;
+        errors = parser_.errors();
+        errors.preThrow(&preThrow);
+        parser_.setEventDg(&doEvent);
+
         version(TrackCount)
         {
             tagName_.setid("tagName_");
             bufChar_.setid("bufChar_");
-            errors_.setid("Errors");
         }
 	}
 
-	void setErrorHandler(IXmlErrorHandler eh)
-	{
+	bool doEvent(XmlEvent!T evt) {
+        switch(evt.eventId) {
+        case SAX.TAG_START:
+            startTag(evt);
+            break;
+        case SAX.TAG_SINGLE:
+            soloTag(evt);
+            break;
+        case SAX.TAG_END:
+            endTag(evt);
+            break;
+        case SAX.TEXT:
+            text(evt);
+            break;
+        case SAX.XML_DEC:
+            declaration(evt);
+            break;
+        case SAX.COMMENT:
+            comment(evt);
+            break;
+        case SAX.CDATA:
+            cdata(evt);
+            break;
+        case SAX.XML_PI:
+            instruction(evt);
+            break;
+        case SAX.DOC_TYPE:
+            startDoctype(evt);
+            break;
+        case SAX.DOC_END:
+            endDoctype(evt);
+            break;
+        default:
+            break;
+        }
+        return true;
 	}
-
 	void explode()
 	{
 		parser_.explode();
@@ -218,30 +204,10 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 
 	private void pushInvalid(string msg)
 	{
-		errors_ ~= msg;
-		if (maxError_ < XmlErrorLevel.INVALID)
-			maxError_ = XmlErrorLevel.INVALID;
+	    errors.pushError(msg, XmlErrorLevel.INVALID);
 	}
 
-	void checkErrorStatus()
-	{
-		auto errorStatus = maxError_;
-		if (maxError_ == XmlErrorLevel.OK)
-			return;
-
-		auto errorReport = makeException("Errors recorded",maxError_);
-		if (maxError_ < XmlErrorLevel.ERROR)
-		{
-			maxError_ = XmlErrorLevel.OK;
-			errors_.length = 0;
-			destroy(errorReport);
-		}
-		else
-			throw errorReport;
-	}
-
-
-	XmlError preThrow(XmlError ex)
+    XmlError preThrow(XmlError ex)
 	{
 		auto conf = doc_.getDomConfig();
 		Variant v = conf.getParameter("error-handler");
@@ -256,39 +222,6 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		return ex;
 	}
 
-	Exception caughtXmlError(XmlError x, XmlErrorLevel level)
-	{
-		auto s = x.toString();
-		pushError(s, level);
-		return preThrow(new XmlError(s, level));
-	}
-	Exception caughtException(Exception x, XmlErrorLevel level)
-	{
-		auto s = x.toString();
-		pushError(s, level);
-		return preThrow(new XmlError(s, level));
-	}
-
-	Exception makeException(string s, XmlErrorLevel level = XmlErrorLevel.FATAL)
-	{
-		pushError(s, level);
-		auto report = new XmlError(s, level);
-		report.errorList = errors_.dup;
-		return preThrow(report);
-	}
-
-	Exception makeException(XmlErrorCode code)
-	{
-		return makeException(getXmlErrorMsg(code), XmlErrorLevel.FATAL);
-	}
-
-	XmlErrorLevel pushError(string msg, XmlErrorLevel level)
-	{
-		errors_ ~= msg;
-		if (maxError_ < level)
-			maxError_ = level;
-		return maxError_;
-	}
     protected void checkSplitName(XmlString aName, ref XmlString nsPrefix, ref XmlString nsLocal)
     {
         uintptr_t sepct = XMLDOM!T.splitNameSpace(aName, nsPrefix, nsLocal);
@@ -296,11 +229,11 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         if (sepct > 0)
         {
             if (sepct > 1)
-                throw makeException(format("Multiple ':' in name %s ",aName));
+                throw errors.makeException(format("Multiple ':' in name %s ",aName));
             if (nsLocal.length == 0)
-                 throw makeException(format("':' at end of name %s",aName));
+                 throw errors.makeException(format("':' at end of name %s",aName));
             if (nsPrefix.length == 0)
-                 throw makeException(format("':' at beginning of name %s ",aName));
+                 throw errors.makeException(format("':' at beginning of name %s ",aName));
         }
     }
 
@@ -362,6 +295,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         // for each attribute, check if the name is a namespace specification
 
         NamedNodeMap amap = elem.getAttributes();
+
         if (amap is null)
             return;
 
@@ -378,8 +312,8 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 
         auto app = appender(alist);
 
-
         bool validate =  parser_.validate();
+
         int nslistct = 0;
 
         bool isNameSpaceDef;
@@ -424,10 +358,10 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 							if (xml_version == 1)
 							{
 								if (validate )
-									pushError(unbindError(atname),XmlErrorLevel.INVALID);
+									errors.pushError(unbindError(atname),XmlErrorLevel.INVALID);
 							}
 							else
-								throw makeException(unbindError(atname));
+								throw errors.makeException(unbindError(atname));
 						}
                         // default namespace unbinding ok for 1.0
                         bind = false;
@@ -437,10 +371,10 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                     else
                     {
 						if (onPrefix)
-							throw makeException(unbindError(atname));
+							throw errors.makeException(unbindError(atname));
 						else
 							if (validate && (xml_version == 1))
-								pushError(unbindError(atname),XmlErrorLevel.INVALID);
+								errors.pushError(unbindError(atname),XmlErrorLevel.INVALID);
                     }
                 }
                 else
@@ -449,11 +383,11 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                     if (xml_version > 1.0)
                     {
                         if (!isNameSpaceIRI(nsURI))
-                            throw this.makeException(format("Malformed IRI %s", nsURI),XmlErrorLevel.ERROR);
+                            throw errors.makeException(format("Malformed IRI %s", nsURI),XmlErrorLevel.ERROR);
                     }
                     else if(!isNameSpaceURI(nsURI))
                     {
-                        throw this.makeException(format("Malformed URI %s", nsURI),XmlErrorLevel.ERROR);
+                        throw errors.makeException(format("Malformed URI %s", nsURI),XmlErrorLevel.ERROR);
                     }
                 }
                 if (bind)
@@ -464,15 +398,15 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                         if (localName == "xmlns")
                         {
                             if (nsURI == xmlNamespaceURI || nsURI == xmlnsURI)
-                                throw this.makeException(format("Cannot set default namespace to %s",nsURI));
+                                throw errors.makeException(format("Cannot set default namespace to %s",nsURI));
 							else if (validate && (xml_version == 1))
-								pushError("Attempt to bind xmlns",XmlErrorLevel.INVALID);
+								errors.pushError("Attempt to bind xmlns",XmlErrorLevel.INVALID);
                         }
                     }
                     else if (prefix == "xml")
                     {
                         if (nsURI != xmlNamespaceURI)
-                            throw this.makeException(format("xml namespace URI %s is not the reserved value %s",nsURI, xmlNamespaceURI));
+                            throw errors.makeException(format("xml namespace URI %s is not the reserved value %s",nsURI, xmlNamespaceURI));
 
                     }
 
@@ -480,29 +414,29 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                     {
                         if (localName == "xmlns")
                         {
-                            throw this.makeException(format("xmlns is reserved, but declared with URI: %s", nsURI));
+                            throw errors.makeException(format("xmlns is reserved, but declared with URI: %s", nsURI));
                         }
                         else if (localName == "xml")
                         {
                             if (nsURI != xmlNamespaceURI)
-                                throw this.makeException(format("xml prefix declared incorrectly ", nsURI));
+                                throw errors.makeException(format("xml prefix declared incorrectly ", nsURI));
                             else if (validate)
-                                this.pushError(format("xml namespace URI %s must only have prefix xml",xmlNamespaceURI),XmlErrorLevel.INVALID);
+                                errors.pushError(format("xml namespace URI %s must only have prefix xml",xmlNamespaceURI),XmlErrorLevel.INVALID);
                             goto DO_BIND;
                         }
                         else if (localName == "xml2")
                         {
                             if (validate)
-                                this.pushError("Binding a reserved prefix xml2",XmlErrorLevel.INVALID);
+                                errors.pushError("Binding a reserved prefix xml2",XmlErrorLevel.INVALID);
                         }
 
                         if (nsURI == xmlNamespaceURI)
                         {
-                            throw this.makeException(format("xml namespace URI cannot be bound to another prefix: %s", nsURI));
+                            throw errors.makeException(format("xml namespace URI cannot be bound to another prefix: %s", nsURI));
                         }
                         if (nsURI == xmlnsURI)
                         {
-                            throw this.makeException(format("xmlns namespace URI cannot be bound to another prefix: %s", nsURI));
+                            throw errors.makeException(format("xmlns namespace URI cannot be bound to another prefix: %s", nsURI));
                         }
                     }
 				DO_BIND:
@@ -534,7 +468,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                     rdef = *pdef;
 
                     if (rdef.getValue() is null)
-                        pushError(format("Namespace %s is unbound",prefix),XmlErrorLevel.ERROR);
+                        errors.pushError(format("Namespace %s is unbound",prefix),XmlErrorLevel.ERROR);
                     nsa.setURI(rdef.getValue());
                     needNS = false;
                 }
@@ -547,16 +481,16 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                     // special allowance
                     if (validate)
                     {
-                        pushError("Undeclared namespace 'xml'", XmlErrorLevel.INVALID);
+                        errors.pushError("Undeclared namespace 'xml'", XmlErrorLevel.INVALID);
                     }
                 }
                 else if (prefix.length == 0)
                 {
                     if (validate)
-                        pushError(noNSMsg(nsa), XmlErrorLevel.INVALID);
+                        errors.pushError(noNSMsg(nsa), XmlErrorLevel.INVALID);
                 }
                 else
-					throw this.makeException(noNSMsg(nsa));
+					throw errors.makeException(noNSMsg(nsa));
             }
 
         }
@@ -584,14 +518,14 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                         string errMsg = format("Attributes with same local name and default namespace: %s and %s",na.getNodeName(), ka.getName());
 
                         if (na.getPrefix() is null || ka.getPrefix() is null)
-                            pushError(errMsg,XmlErrorLevel.ERROR);
+                            errors.pushError(errMsg,XmlErrorLevel.ERROR);
                         else
-                            throw this.makeException(errMsg);
+                            throw errors.makeException(errMsg);
                     }
                 }
             }
         }
-        checkErrorStatus();
+        errors.checkErrorStatus();
 
         return;
     }
@@ -615,7 +549,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 nsURI = rdef.getValue();
                 if (nsURI.length == 0)
                 {
-                    pushError(format("Namespace %s is unbound",prefix ),XmlErrorLevel.FATAL);
+                    errors.pushError(format("Namespace %s is unbound",prefix ),XmlErrorLevel.FATAL);
                 }
                 else
                 {
@@ -629,7 +563,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         {
             if (prefix == "xmlns")
             {
-                throw makeException(format("%s Elements must not have prefix xmlns",elem.getNodeName()));
+                throw errors.makeException(format("%s Elements must not have prefix xmlns",elem.getNodeName()));
             }
 			// unless this is DOCTYPE defined in a magic way
 			if ((this.dtdData_ !is null) && ((this.dtdData_.id_ == elem.getNodeName()) || (level_.def_ !is null)))
@@ -637,11 +571,11 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 				// overrides?
 			}
 			else
-				throw makeException(format("No namespace found for %s", elem.getNodeName()),XmlErrorLevel.FATAL);
+				throw errors.makeException(format("No namespace found for %s", elem.getNodeName()),XmlErrorLevel.FATAL);
         }
-        checkErrorStatus();
+        errors.checkErrorStatus();
     }
-	void makeTag(ref const XmlEvent s, bool hasContent)
+	void makeTag(ref const XmlEvent!T s, bool hasContent)
 	{
 		XmlString		tagName = s.data;
 
@@ -707,7 +641,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 				auto dupix = attrMap_.getDuplicateIndex();
 				if (dupix >= 0)
 				{
-					throw makeException(format("Duplicate attribute %s", attrMap_[dupix].value));
+					throw errors.makeException(format("Duplicate attribute %s", attrMap_[dupix].value));
 				}
 			}
 			// TODO : review namespaces
@@ -745,30 +679,27 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		}
 	}
 
-	void init(ref XmlEvent s)
-	{
-		s = new XmlEvent();
-	}
-	void soloTag(const XmlEvent  s)
+
+	void soloTag(const XmlEvent!T  s)
 	{
 		makeTag(s,false);
 	}
 
-	void startTag(const XmlEvent s)
+	void startTag(const XmlEvent!T s)
 	{
 		makeTag(s,true);
 	}
 
-	void text(const XmlEvent  s)
+	void text(const XmlEvent!T  s)
 	{
 		level_.n_.appendChild(new Text(s.data));
 	}
-	void comment(const XmlEvent  s)
+	void comment(const XmlEvent!T  s)
 	{
 	// comments may be attached at document level
 		level_.n_.appendChild(doc_.createComment(s.data));
 	}
-	void cdata(const XmlEvent  s)
+	void cdata(const XmlEvent!T  s)
 	{
 		version(TagNesting)
 			auto edef = cast(ElementDef) level_.nest_.info_;
@@ -780,24 +711,24 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 			: doc_.createCDATASection(s.data);
 		level_.n_.appendChild(n);
 	}
-	final void declaration(const XmlEvent  s)
+	final void declaration(const XmlEvent!T  s)
 	{
 		// use the attributes, or
 		auto docVersion = s.attributes.get("version","1.0");
 		doc_.setXmlVersion(docVersion);
 	}
 
-	final void instruction(const XmlEvent  s)
+	final void instruction(const XmlEvent!T  s)
 	{
 		auto p = s.attributes[0];
 		level_.n_.appendChild(doc_.createProcessingInstruction(p.name, p.value));
 	}
 
-	final void endTag(const XmlEvent  s)
+	final void endTag(const XmlEvent!T  s)
 	{
 		if (s.data != level_.tag_)
 		{
-			throw makeException(format("End tag, expected %s, got %s", level_.tag_, s.data));
+			throw errors.makeException(format("End tag, expected %s, got %s", level_.tag_, s.data));
 		}
 		//lastCloseTag_ = level_.tag_;
 		//TODO: validations
@@ -812,9 +743,9 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		{
 			if (parser_.validate())
 			{
-				validElementContent(edef, level_.e_, this);
-				if (maxError_ != 0)
-					checkErrorStatus();
+				validElementContent(edef, level_.e_, errors);
+				if (errors.maxError != 0)
+					errors.checkErrorStatus();
 			}
 		}
 		auto slen = stack_.length;
@@ -838,7 +769,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 				parser_.popContext();
 			replace = parser_.attributeTextReplace(resultBuf, 0);
 		}
-		result = (replace) ? xmlt!T.data(resultBuf).idup : oldValue;
+		result = (replace) ? sxml!T.data(resultBuf).idup : oldValue;
         XmlString[] valueset;
         uint vct = 0;
         bool doValidate = parser_.validate();
@@ -851,15 +782,15 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 				if (doValidate)
 				{
 					if (!parser_.isXmlName(result))
-						pushError(format("ID value %s is not a proper XML name", result),XmlErrorLevel.INVALID);
+						errors.pushError(format("ID value %s is not a proper XML name", result),XmlErrorLevel.INVALID);
 					XmlString elemId = adef.attList.id;
 					if (idSet_ is null)
-						throw makeException("no validation of ID configured");
+						throw errors.makeException("no validation of ID configured");
 					bool isUnique = idSet_.mapElementID(elemId, result);
 					if (!isUnique)
 					{
 						XmlString existingElementName = idSet_.idElements[result];
-						pushError(format("non-unique ID value %s already in element %s ", result,existingElementName),XmlErrorLevel.INVALID);
+						errors.pushError(format("non-unique ID value %s already in element %s ", result,existingElementName),XmlErrorLevel.INVALID);
 					}
 				}
 				break;
@@ -1034,10 +965,10 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
             adef.values = valueList;
 
         }
-        if (maxError_ > 0)
+        if (errors.maxError > 0)
         {
             pushInvalid(format("Errors during ATTLIST normalisation for %s",alist.id));
-            checkErrorStatus();
+            errors.checkErrorStatus();
         }
         return true;
     }
@@ -1143,8 +1074,8 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
             addDefaultAttributes(atlist);
         if (doValidate)
         {
-            if (maxError_ != 0)
-                checkErrorStatus();
+            if (errors.maxError != 0)
+                errors.checkErrorStatus();
         }
     }
 	/**
@@ -1238,7 +1169,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
                 app ~= test;
             }
         }
-        auto checkVal = xmlt!T.data(app);
+        auto checkVal = sxml!T.data(app);
         if (checkVal != value)
         {
             value = checkVal.idup;
@@ -1247,10 +1178,10 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
         return false;
     }
 
-	alias XMLDTD!(T).ChildElemList ChildElemList;
-	alias XMLDTD!(T).ChildId ChildId;
-	alias XMLDTD!(T).FelEntry FelEntry;
-	alias XMLDTD!(T).FelType FelType;
+	alias xml.dtd.ChildElemList!T ChildElemList;
+	alias xml.dtd.ChildId!T ChildId;
+	alias xml.dtd.FelEntry!T FelEntry;
+
 	alias XMLDTD!(T).toDTDString toDTDString;
 	private struct clistinfo
 	{
@@ -1269,7 +1200,8 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 	}
 
 	/// Given the ElementDef, check Element has conforming children
-	static bool validElementContent(ElementDef edef, Element parent, IXmlErrorHandler events)
+	static
+	bool validElementContent(ElementDef edef, Element parent, XmlErrors errors)
 	{
 		// collect the children in temporary
 		Node nd1 = parent.getFirstChild();
@@ -1377,7 +1309,7 @@ class DXmlDomBuild(T) : xmlt!T.IXmlErrorHandler, xmlt!T.IXmlDocHandler
 		}
 		void pushError(string s)
 		{
-			events.pushError(s,XmlErrorLevel.FATAL);
+			errors.pushError(s,XmlErrorLevel.FATAL);
 		}
 
 
@@ -1568,24 +1500,7 @@ void parseXml(T,S)(XMLDOM!T.Document doc, immutable(S)[] sxml, bool validate = t
     builder.validate(validate);
 	builder.parseNoSlice!S(doc, sxml);
 }
-void parseXmlSlice(T)(XMLDOM!T.Document doc, immutable(T)[] sxml, bool validate = true)
-{
-	auto builder = new DXmlDomBuild!(T)();
-	scope(exit)
-        builder.explode();
-    builder.validate(validate);
-	builder.parseSlice(doc, sxml);
-}
 
-/// Append to DOM document from contents of xml file. Strings sliced from document if/where possible.
-void parseXmlSliceFile(T)(XMLDOM!T.Document doc, string srcpath, bool validate = true )
-{
-	auto builder = new DXmlDomBuild!T();
-	scope(exit)
-        builder.explode();
-	builder.validate(validate);
-	builder.parseSliceFile(doc, srcpath);
-}
 /// Append to DOM document from contents of xml file. Text and element names created on the fly.
 
 void parseXmlFile(T)(XMLDOM!T.Document doc, string srcpath, bool validate = true )

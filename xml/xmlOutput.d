@@ -13,7 +13,7 @@ Each string is output via the delegate StringPutDg.
 **/
 
 module xml.xmlOutput;
-import xml.xmlChar;
+import xml.isxml;
 
 import std.array;
 import std.exception;
@@ -22,15 +22,13 @@ import std.string;
 import std.stdint;
 import xml.util.buffer;
 import tempxml = xml.txml;
+import xml.attribute;
 
 template XMLOutput(T)
 {
-	alias tempxml.xmlt!T	txml;
-
+	alias tempxml.sxml!T	txml;
 	alias txml.XmlString XmlString;
-	alias txml.CharEntityMap CharEntityMap;
-	alias txml.AttributeMap AttributeMap;
-	alias txml.XmlEvent     XmlEvent;
+
 
 	alias void delegate(const(T)[] s)	StringPutDg;
 	static if (is(T==char))
@@ -57,7 +55,7 @@ struct XmlPrintOptions
         xversion = 1.0;
     }
 
-    CharEntityMap	charEntities;
+    XmlString[dchar] 	charEntities;
 
     uint	indentStep; // increment for recursion
     bool	emptyTags;  // print empty tag style
@@ -125,7 +123,7 @@ XmlString makeXmlComment(XmlString txt)
 }
 
 /// OutputRange (put). Checks every character to see if needs to be entity encoded.
-void encodeCharEntity(P)(auto ref P p, XmlString text, CharEntityMap charEntities)
+void encodeCharEntity(P)(auto ref P p, XmlString text, XmlString[dchar] charEntities)
 {
     foreach(dchar d ; text)
     {
@@ -138,7 +136,7 @@ void encodeCharEntity(P)(auto ref P p, XmlString text, CharEntityMap charEntitie
 }
 
 /// Return character entity encoded version of string
-XmlString encodeStdEntity(XmlString text,  CharEntityMap charEntities)
+XmlString encodeStdEntity(XmlString text,  XmlString[dchar] charEntities)
 {
 	Buffer!T	app;
     encodeCharEntity(app, text,charEntities);
@@ -250,11 +248,11 @@ struct XmlPrinter
         return options.noWhiteSpace;
     }
 
-    private void appendAttributes(AttributeMap attr)
+    private void appendAttributes(AttributeMap!T attr)
     {
         if (attr.length == 0)
             return;
-        void output(ref AttributeMap pmap)
+        void output(ref AttributeMap!T pmap)
         {
             foreach(k,v ; pmap)
             {
@@ -277,7 +275,7 @@ struct XmlPrinter
 
 
     }
-	void mapToAttributePairs(AttributeMap map, ref AttributeMap ap)
+	void mapToAttributePairs(AttributeMap!T map, ref AttributeMap!T ap)
 	{
 		ap = map;
 	}
@@ -296,14 +294,14 @@ struct XmlPrinter
         options.putDg(pack.data);
     }
     /// Element containing no attributes and single text content. Encode content.
-    void  putTextElement(XmlString ename, ref AttributeMap map, XmlString content)
+    void  putTextElement(XmlString ename, ref AttributeMap!T map, XmlString content)
     {
         pack.length = 0;
         pack.reserve(ename.length * 2 + 5 + content.length);
         appendStartTag(ename);
         if (map.length > 0)
 		{
-			AttributeMap ap = map;
+			auto ap = map;
             appendAttributes(ap);
 		}
         pack.put('>');
@@ -322,13 +320,13 @@ struct XmlPrinter
         options.putDg( pack.data );
     }
     /// indented start tag with attributes
-    void putStartTag(XmlString tag, AttributeMap attr, bool isEmpty)
+    void putStartTag(XmlString tag, AttributeMap!T attr, bool isEmpty)
     {
         pack.length = 0;
         appendStartTag(tag);
         if (attr.length > 0)
 		{
-			AttributeMap ap = attr;
+			auto ap = attr;
             appendAttributes(ap);
 		}
         if (isEmpty)
@@ -388,7 +386,7 @@ struct XmlPrinter
 }
 
 /// output the XML declaration
-void printXmlDeclaration(AttributeMap attr, StringPutDg putOut)
+void printXmlDeclaration(AttributeMap!T attr, StringPutDg putOut)
 {
     if (attr.length == 0)
         return;

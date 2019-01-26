@@ -16,7 +16,7 @@ module xml.util.print;
 
 version=ATTRIBUTE_BLOCK;
 
-import xml.xmlChar;
+import xml.isxml;
 import std.array;
 import std.exception;
 import std.conv;
@@ -54,7 +54,7 @@ struct XmlPrintOptions
         xversion = 1.0;
     }
 
-    CharEntityMap	charEntities;
+    XmlString[dchar]	charEntities;
 
     uint	indentStep; // increment for recursion
     bool	emptyTags;  // print empty tag style

@@ -10,15 +10,13 @@ module xml.xmlArrayDom;
 import std.stdio;
 import xml.util.buffer;
 import xml.txml;
-import xml.textInput;
-import xml.dom.dtdt;
+import xml.input;
+import xml.dtd;
 
 import std.string, std.conv, std.exception;
 import std.variant;
-version(GC_STATS)
-{
-	import xml.util.gcstats;
-}
+
+
 //debug = VERBOSE;
 debug(VERBOSE)
 {
@@ -29,9 +27,14 @@ debug(VERBOSE)
 /// Elements, Attributes, nodes, have no parent or owner member.
 
 import xml.xmlOutput;
-import xml.xmlParser;
+import xml.parser;
+import xml.attribute;
 
 template XMLArrayDom(T) {
+
+    alias immutable(T)[] XmlString;
+    alias AttributeMap!T    Attributes;
+    alias XmlEvent!T        XmlReturn;
 
 	alias xout = xml.xmlOutput.XMLOutput!T;
 
@@ -43,42 +46,11 @@ template XMLArrayDom(T) {
 	alias xout.XmlPrinter XmlPrinter;
 	alias xout.StringPutDg		StringPutDg;
 
-	alias xout.XmlString	XmlString;
-	alias xout.AttributeMap	AttributeMap;
-	alias xout.XmlEvent		XmlReturn;
 	alias Buffer!Item		ItemList;
 
-	alias xml.txml.xmlt!T       xmli;
-	alias xmli.NullDocHandler   NullDocHandler;
-	alias xmli.IXmlErrorHandler IXmlErrorHandler;
-	alias xmli.IXmlDocHandler IXmlDocHandler;
-	alias xmli.XmlEvent  XmlEvent;
-	alias xmli.XmlErrorImpl  XmlErrorImpl;
-
-	alias xml.dom.dtdt.XMLDTD!T dtdi;
-	alias dtdi.DocTypeData DocTypeData;
 
 	abstract class Item
 	{
-		version(GC_STATS)
-		{
-			mixin GC_statistics;
-			static this()
-			{
-				setStatsId(typeid(typeof(this)).toString());
-			}
-
-			this()
-			{
-				gcStatsSum.inc();
-			}
-			~this()
-			{
-				gcStatsSum.dec();
-			}
-		}
-
-
 		void explode()
 		{
 
@@ -185,11 +157,11 @@ Simplified Element, name in content field,  with all children in array, attribut
 */
 class Element :  Item
 {
-    AttributeMap   			attr;
+    Attributes   			attr;
     ItemList				children;
     XmlString				tag;
 
-    this(XmlString id, AttributeMap amap)
+    this(XmlString id, Attributes amap)
     {
         this(id);
         attr = amap;
@@ -220,6 +192,7 @@ class Element :  Item
     this()
     {
         nodeType_ = NodeType.Element_node;
+        tag = (immutable(T)[]).init;
     }
 
 	override void explode()
@@ -371,28 +344,27 @@ class Element :  Item
         printElement(cast(Element)this, tp);
         return result.idup();
     }
-
 }
 
 
 class XmlDec : Item
 {
 private:
-    AttributeMap attributes_;
+    Attributes attr;
 public:
     auto ref getAttributes()
     {
-        return attributes_;
+        return attr;
     }
 
     void removeAttribute(XmlString key)
     {
-        attributes_.removeName(key);
+        attr.removeName(key);
     }
 
     void setAttribute(XmlString name, XmlString value)
     {
-        attributes_[name] = value;
+        attr[name] = value;
     }
 }
 
@@ -510,6 +482,7 @@ void printItems(const Item[] items, ref XmlPrinter tp)
     }
 }
 
+
 /// Output with core print
 void printElement(Element e, ref XmlPrinter tp)
 {
@@ -556,20 +529,17 @@ Element createElement(const XmlReturn ret)
 }
 
 /// collector callback class
-class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
+class ArrayDomBuilder
 {
     Buffer!Element		elemStack_;
     Element			    root_;
     Element				parent_;
 	XmlParser!T			parser_;
-	XmlEvent			event_;
-	DocTypeData			doctype_;
+	DocTypeData!T		doctype_;
 
     this()
     {
 		parser_ = new XmlParser!T();
-		parser_.docInterface = this;
-		parser_.errorInterface = this;
     }
     @property {
         Document document() {
@@ -586,28 +556,12 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 		return root_;
 	}
 
-	override void init(ref XmlEvent s)
-	{
-		event_ = new XmlEvent;
-		s = event_;
-	}
-
-	// like
-    override void startDoctype(Object parser)
+    void startDoctype(Object parser)
 	{
 		doctype_ = parser_.DTD(); // get DocTypeData from parser
 	}
-    override void endDoctype(Object parser)
-	{
-	}
 
-	override void notation(Object n)
-	{
-	}
-	void setErrorHandler(IXmlErrorHandler eh)
-	{
-	}
-    override void startTag(const XmlEvent ret)
+    void startTag(const XmlEvent!T ret)
     {
         auto e = createElement(ret);
 		if (parent_ is null)
@@ -621,12 +575,12 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 			parent_ = e;
 		}
     }
-    override void soloTag(const XmlEvent ret)
+    void soloTag(const XmlEvent!T ret)
     {
         parent_ ~= createElement(ret);
     }
 
-    override void endTag(const XmlEvent ret)
+    void endTag(const XmlEvent!T ret)
     {
 		if (elemStack_.length > 0)
 		{
@@ -636,24 +590,24 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 			parent_ = null;
 		}
     }
-    override void text(const XmlEvent ret)
+    void text(const XmlEvent!T ret)
     {
         parent_.addText(ret.data);
     }
-    override void cdata(const XmlEvent ret)
+    void cdata(const XmlEvent!T ret)
     {
         parent_.addCDATA(ret.data);
     }
-    override void comment(const XmlEvent ret)
+    void comment(const XmlEvent!T ret)
     {
         parent_.addComment(ret.data);
     }
-    override void instruction(const XmlEvent ret)
+    void instruction(const XmlEvent!T ret)
     {
 		auto p = ret.attributes[0];
 		parent_.appendChild(new ProcessingInstruction(p.name, p.value));
     }
-    override void declaration(const XmlEvent ret)
+    void declaration(const XmlEvent!T ret)
     {
 		root_.attr = ret.attributes;
     }
@@ -675,23 +629,40 @@ class ArrayDomBuilder : XmlErrorImpl, IXmlDocHandler
 	{
 		parser_.fillSource = new XmlFileReader(File(filename,"r"));
 	}
-    //
-	void setFileSlice(string filename)
-	{
-		parser_.sliceFile(filename);
-	}
 
 	void setSourceSlice(immutable(T)[] data)
 	{
 		parser_.initSource(data);
 	}
 
+    bool parserEvent(XmlEvent!T evt) {
+        switch(evt.eventId) {
+        case SAX.TAG_START:
+            startTag(evt);
+            break;
+        case SAX.TAG_SINGLE:
+            soloTag(evt);
+            break;
+        case SAX.TAG_END:
+            endTag(evt);
+            break;
+        case SAX.TEXT:
+            text(evt);
+            break;
+        default:
+            break;
+
+        }
+        return true;
+    }
 	void parseDocument()
 	{
 	    if (root_ is null)
         {
             document = new Document();
         }
+        parser_.setEventDg(&parserEvent);
+
 		parser_.parseAll();
 	}
 

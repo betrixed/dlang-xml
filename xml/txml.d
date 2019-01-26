@@ -1,24 +1,5 @@
 module xml.txml;
 
-/*
- Various Xml parsing options have been templated for character type.
- to allow for interesting combinations of source documents.
-
- A critical choice for performance is the data structure used to implement XmlBuffer.
- XmlBuffer is used to accumulate segments of xml text.
-
- This module establishes some non-dependent enums, and those
- interfaces and classes which will change with the template character type argument.
-
- xmlt(T) and its code resources are used by nearly all of the other modules in this xml package.
- xml.txml establishes XmlEvent, IXmlErrorHandler, IXmlDocHandler  templated for a character type.
-
----------------
-Copyright: Copyright Michael Rynn 2011 - 2016.
-License:   $(HTTP www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
-Authors:   Michael Rynn
- */
-
 import std.typecons : tuple, Tuple;
 import std.string, std.stdint, std.utf;
 import std.algorithm;
@@ -27,49 +8,21 @@ import xml.util.buffer;
 import std.array;
 import std.traits;
 import std.conv;
-import xml.xmlChar;
-import xml.xmlError;
-import xml.xmlAttribute;
+import xml.isxml;
+import xml.error;
+import xml.attribute;
 import std.ascii;
 import std.format;
 version(GC_STATS)
 	import xml.util.gcstats;
 
-enum CharFilter
-{
-    filterOff, filterOn, filterAlwaysOff
-}
+
 
 /// Parameter names for parser.
-enum string xmlAttributeNormalize = "attribute-normalize";
-enum string xmlCharFilter = "char-filter";
-enum string xmlNamespaces = "namespaces";
-enum string xmlFragment = "fragment";
 
 //alias void delegate() SourceEmptyDg;
 //alias void delegate(Exception)	PreThrowDg;
 /// Return a string for the error code
-
-
-enum SAX {
-	TAG_START, //0
-	TAG_SINGLE, //1
-	TAG_EMPTY = TAG_SINGLE, // 1
-	TAG_END,//2
-	TEXT, //3
-	CDATA, //4
-	COMMENT, //5
-	XML_PI, //6
-	XML_DEC, //7
-	DOC_END,  //8  - is a usefull binary size for an array of delegates
-	DOC_TYPE,	/// DTD parse results contained in doctype as DtdValidate.
-	XI_NOTATION,
-	XI_ENTITY,
-	XI_OTHER,		/// internal DOCTYPE declarations
-	RET_NULL,  /// nothing returned
-	ENUM_LENGTH, /// size of array to hold all the other values
-
-}
 
 enum NodeType
 {
@@ -88,9 +41,6 @@ enum NodeType
 	Notation_node = 12
 };
 
-enum EntityType { Parameter, General, Notation }
-
-enum RefTagType { UNKNOWN_REF, ENTITY_REF, SYSTEM_REF, NOTATION_REF}
 
 /// Kind of default value for attributes
 enum AttributeDefault
@@ -104,21 +54,8 @@ enum AttributeDefault
 /** Distinguish various kinds of attribute data.
 The value att_enumeration means a choice of pre-defined values.
 **/
-enum AttributeType
-{
-    att_cdata,
-    att_id,
-    att_idref,
-    att_idrefs,
-    att_entity,
-    att_entities,
-    att_nmtoken,
-    att_nmtokens,
-    att_notation,
-    att_enumeration
-}
 
-template xmlt(T) {
+template sxml(T) {
 	alias immutable(T)[] XmlString;
 
 	static const XmlString xmlNamespaceURI = "http://www.w3.org/XML/1998/namespace";
@@ -259,167 +196,12 @@ template xmlt(T) {
         }
 	}
 
-	alias XMLAttribute!T.XmlAttribute	XmlAttribute;
-	alias XMLAttribute!T.AttributeMap   AttributeMap;
-
-	void remove(ref AttributeMap attr, XmlString key)
+	void remove(ref AttributeMap!T attr, XmlString key)
 	{
 	}
 
     alias XmlString[dchar] CharEntityMap;
 	// Its a class so can pass it around as pointer
-	class XmlEvent {
-		SAX				eventId;
-		XmlString		data;
-		AttributeMap	attributes;
-		version(GC_STATS)
-		{
-			mixin GC_statistics;
-			static this()
-			{
-				setStatsId(typeid(typeof(this)).toString());
-			}
-		}
-		this()
-		{
-			version(GC_STATS)
-				gcStatsSum.inc();
-
-		}
-		~this()
-		{
-			version(GC_STATS)
-				gcStatsSum.dec();
-
-		}
-	}
-
-	interface IXmlErrorHandler
-	{
-
-		void checkErrorStatus();
-		XmlError preThrow(XmlError ex);
-
-		XmlErrorLevel pushError(string s, XmlErrorLevel level);
-
-
-		Exception makeException(XmlErrorCode code);
-		Exception makeException(string s, XmlErrorLevel level = XmlErrorLevel.FATAL);
-		Exception caughtException(Exception x, XmlErrorLevel level = XmlErrorLevel.FATAL);
-	}
-
-	class XmlErrorImpl : IXmlErrorHandler
-	{
-		private {
-			Buffer!string			errors_;
-			XmlErrorLevel			maxError_;
-		}
-		version(GC_STATS)
-		{
-			mixin GC_statistics;
-			static this()
-			{
-				setStatsId(typeid(typeof(this)).toString());
-			}
-		}
-		this()
-		{
-			version(GC_STATS)
-				gcStatsSum.inc();
-
-		}
-		~this()
-		{
-			version(GC_STATS)
-				gcStatsSum.dec();
-
-		}
-		XmlErrorLevel pushError(string s, XmlErrorLevel level)
-		{
-			errors_.put(s);
-			if (maxError_ < level)
-				maxError_ = level;
-			return maxError_;
-		}
-
-		void checkErrorStatus(){}
-
-		XmlError preThrow(XmlError e)
-		{
-			return e;
-		}
-
-		Exception makeException(XmlErrorCode code)
-		{
-			return new XmlError(getXmlErrorMsg(code));
-
-		}
-		Exception makeException(string s, XmlErrorLevel level = XmlErrorLevel.FATAL)
-		{
-			return new XmlError(s,level);
-		}
-
-		Exception caughtException(Exception x, XmlErrorLevel level = XmlErrorLevel.FATAL)
-		{
-			auto s = x.toString();
-			pushError(s, XmlErrorLevel.FATAL);
-			return preThrow(new XmlError(s, XmlErrorLevel.FATAL));
-		}
-	}
-	interface IXmlDocHandler
-	{
-		void init(ref XmlEvent s); // Allows user to set own XmlEvent class derivative
-		void startTag(const XmlEvent s); // tag, followed by attribute pairs
-		void soloTag(const XmlEvent s);
-		void endTag(const XmlEvent s); // tag
-		void text(const XmlEvent s); // text
-		void cdata(const XmlEvent s);
-		void comment(const XmlEvent s);
-		void instruction(const XmlEvent s); // Processing instruction name, content
-		void declaration(const XmlEvent s); // declaration attribute name, value
-
-		void startDoctype(Object parser);		// notify of Dtd processing start
-		void endDoctype(Object parser);		// notify of Dtd completed
-		void notation(Object n);				// Notation entity data reference
-		/// currently up to StdEventSize , ie XmlDeclaration last eventId
-		/// just return the entity name, not decoded
-
-		void setErrorHandler(IXmlErrorHandler eh);
-	}
-
-	class NullDocHandler :  IXmlDocHandler {
-		void init(ref XmlEvent s){} // Allows user to set own XmlEvent class derivative
-		void startTag( const XmlEvent s){} // tag, followed by attribute pairs
-		void soloTag(const XmlEvent s){}
-		void endTag(const XmlEvent s){} // tag
-		void text(const XmlEvent s){} // text
-		void cdata(const XmlEvent s){}
-		void comment(const XmlEvent s){}
-		void instruction(const XmlEvent s){} // Processing instruction name, content
-		void declaration(const XmlEvent s){} // declaration attribute name, value
-
-		void startDoctype(Object parser){}		// notify of Dtd processing start
-		void endDoctype(Object parser){}		// notify of Dtd completed
-
-		void notation(Object n){}				// Notation entity data reference
-		/// currently up to StdEventSize , ie XmlDeclaration last eventId
-		/// just return the entity name, not decoded
-		void entityName(const(T)[] s,bool inAttribute){}
-
-		void setErrorHandler(IXmlErrorHandler eh){
-			errorHandler_ = eh;
-		}
-		private:
-			IXmlErrorHandler errorHandler_;
-	}
-}
-
-static string badCharMsg(dchar c)
-{
-	auto val = cast(uint)c;
-	if ( ((val >= 0xD800) && (val < 0xE000)) || ((val > 0xFFFD) && (val < 0x10000)) || (val > 0x110000))
-		return format("Forbidden character range 0x%x\n", val);
-	return format("bad character 0x%x [%s]\n", val, c);
 }
 
 /**

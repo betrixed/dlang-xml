@@ -26,10 +26,10 @@ import core.memory;
 import core.stdc.string;
 import xml.txml;
 import xml.xmlOutput;
-import xml.xmlAttribute;
+import xml.attribute;
 
 import std.exception;
-import xml.xmlError;
+import xml.error;
 
 
 
@@ -114,8 +114,8 @@ public:
 
 template XMLDOM(T)
 {
-	alias immutable(T)[] XmlString;
-	alias XMLAttribute!T.AttributeMap	AttributeMap;
+	alias immutable(T)[]        XmlString;
+
 	static if (is(T==char))
 		alias std.conv.text	 concats;
 	else static if (is(T==wchar))
@@ -2099,7 +2099,7 @@ public:
     }
 
     /// Set and get all the attributes using whatever AttributeMap is
-    void setAttributes(AttributeMap amap)
+    void setAttributes(AttributeMap!T amap)
     {
         foreach(k,v ; amap)
         {
@@ -3038,7 +3038,7 @@ void printDocument(Document d, StringPutDg putOut, uint indent)
     auto tp = PrintDom(opt,indent);
     if (!canon || (opt.xversion > 1.0))
     {
-        AttributeMap attributes;
+        AttributeMap!T attributes;
         attributes.push("version", d.getXmlVersion());
         if (!canon)
         {
@@ -3066,7 +3066,7 @@ void printElement(Element e, PrintDom tp)
     auto putOut = tp.options.putDg;
 
     auto tag = e.getTagName();
-    AttributeMap smap;
+    AttributeMap!T smap;
     if (hasAttributes)
         smap = toAttributeMap(e);
 
@@ -3142,9 +3142,9 @@ version(GC_STATS)
 }
 
 /// Return AttributeMap (whatever it is), from DOM element
-AttributeMap toAttributeMap(Element e)
+AttributeMap!T toAttributeMap(Element e)
 {
-    AttributeMap result;
+    AttributeMap!T result;
     NamedNodeMap atmap = e.getAttributes();
 
     if (atmap !is null)

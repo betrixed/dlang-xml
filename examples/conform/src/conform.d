@@ -49,11 +49,11 @@ import std.variant;
 import std.array;
 import std.exception;
 
-import xml.textInput;
+import xml.input;
 import xml.util.buffer;
 import xml.txml;
 import xml.util.jisx0208;
-import xml.xmlParser;
+import xml.parser;
 
 import std.stdint;
 /**
@@ -166,7 +166,5 @@ int main(string[] args)
 
 	getchar();
 	return result;
-
-
 }
 

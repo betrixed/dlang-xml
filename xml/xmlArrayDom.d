@@ -30,7 +30,7 @@ import xml.xmlOutput;
 import xml.parser;
 import xml.attribute;
 
-template XMLArrayDom(T) {
+template XMLArrayDom(T)  {
 
     alias immutable(T)[] XmlString;
     alias AttributeMap!T    Attributes;
@@ -529,7 +529,7 @@ Element createElement(const XmlReturn ret)
 }
 
 /// collector callback class
-class ArrayDomBuilder
+class ArrayDomBuilder : IBuildDom!T
 {
     Buffer!Element		elemStack_;
     Element			    root_;
@@ -556,11 +556,16 @@ class ArrayDomBuilder
 		return root_;
 	}
 
-    void startDoctype(Object parser)
+    void startDoctype(const XmlEvent!T evt)
 	{
-		doctype_ = parser_.DTD(); // get DocTypeData from parser
+		doctype_ = cast( DocTypeData!T ) evt.obj; // get DocTypeData from parser
 	}
-
+    void endDoctype(const XmlEvent!T evt)
+	{
+	}
+    void notation(const XmlEvent!T evt)
+	{
+	}
     void startTag(const XmlEvent!T ret)
     {
         auto e = createElement(ret);
@@ -627,7 +632,7 @@ class ArrayDomBuilder
 
 	void setFile(string filename)
 	{
-		parser_.fillSource = new XmlFileReader(File(filename,"r"));
+		parser_.fillSource = new XmlFileReader(filename);
 	}
 
 	void setSourceSlice(immutable(T)[] data)

@@ -11,8 +11,6 @@ import std.datetime.stopwatch : benchmark, StopWatch;
 import std.file;
 import xml.util.buffer;
 
-//import xml.xml.jcnSlicer;
-
 import std.stdio;
 import core.memory;
 import std.random;
@@ -45,9 +43,6 @@ double timedSeconds(ref StopWatch sw)
     auto d = sw.peek();
     // 100 ns hecto-nanoseconds 10^7
     return d.total!"hnsecs" * 1e-7;
-
-
-    //return duration.to!("seconds",double)();
 }
 
 void fullCollect()

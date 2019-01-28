@@ -1,10 +1,13 @@
 module main;
 
-import stdxml = xml.std.xmlSlicer;
+import stdxml = xml.jcn;
 import std.stdio;
 import std.file;
-import std.datetime;
-import core.memory, xml.util.buffer, xml.util.gcstats;
+
+import core.time: Duration;
+import std.datetime.stopwatch : benchmark, StopWatch;
+
+import core.memory, xml.util.buffer;
 import xml.xmlLinkDom;
 import xml.util.bomstring;
 import xml.dom.domt;
@@ -15,6 +18,13 @@ import std.variant;
 // Can it cope with entropy? How about a large XML document into linked DOM structure?
 // help the GC by blowing up intransigant referencing data structures
 
+double timedSeconds(ref StopWatch sw)
+{
+    auto d = sw.peek();
+    // 100 ns hecto-nanoseconds 10^7
+    return d.total!"hnsecs" * 1e-7;
+}
+
 void fullCollectNode()
 {
 	writeln("full GC");
@@ -22,7 +32,7 @@ void fullCollectNode()
 	sw.start();
 	GC.collect();
 	sw.stop();
-	writeln("Full collection in ", sw.peek().msecs, " [ms]");
+	writeln("Full collection in ", timedSeconds(sw), " [s]");
 
 }
 
@@ -45,7 +55,7 @@ void fullCollectItem()
 	GC.collect();
 	sw.stop();
 
-	writeln("Full collection in ", sw.peek().msecs, " [ms]");
+	writeln("Full collection in ", timedSeconds(sw), " [s]");
 
 }
 /*
@@ -68,7 +78,7 @@ void fullCollectStdXml()
 	GC.collect();
 	sw.stop();
 
-	writeln("Full collection in ", sw.peek().msecs, " [ms]");
+	writeln("Full collection in ", timedSeconds(sw), " [s]");
 
 }
 
@@ -105,7 +115,7 @@ void loadFileStdXml(string fname)
 		destroy(doc);
 		sw.stop();
 
-		writeln(fname, " link dom loaded in ", sw.peek().msecs, " [ms]");
+		writeln(fname, " link dom loaded in ", timedSeconds(sw), " [s]");
 
 		//delete doc; // no backpointers;
     }
@@ -167,7 +177,7 @@ void loadFileTest(string fname)
 	parseXmlFile!(char)(doc, fname, true);
 	doc.explode();
 	sw.stop();
-	writeln(fname, " to linkdom loaded in ", sw.peek().msecs, " [ms]");
+	writeln(fname, " link dom loaded in ", timedSeconds(sw), " [s]");
 
 
 }
@@ -256,7 +266,7 @@ void main(string[] argv)
 		getchar();
 		writeln(" All GC Results. Enter to continue");
 		getchar();
-		GCStatsSum.AllStats();
+		//cd GCStatsSum.AllStats();
 	}
 
 	writeln("All done -- Enter to exit");

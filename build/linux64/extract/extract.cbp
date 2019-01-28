@@ -7,33 +7,38 @@
 		<Option compiler="dmd" />
 		<Build>
 			<Target title="Debug">
-				<Option output="../extract64d" prefix_auto="1" extension_auto="1" />
+				<Option output="../../../bin/extract64d" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../" />
 				<Option object_output="Debug/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />
-					<Add option="-I../../../ -version=GC_STATS" />
+					<Add option="-I../../../" />
 				</Compiler>
 			</Target>
 			<Target title="Release">
-				<Option output="../extract64r" prefix_auto="1" extension_auto="1" />
+				<Option output="./../../bin/extract64r" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../" />
 				<Option object_output="Release/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
 				<Compiler>
 					<Add option="-O" />
-					<Add option="-I../../../ -version=GC_STATS" />
+					<Add option="-I../../../" />
 				</Compiler>
 			</Target>
 		</Build>
 		<Unit filename="../../../examples/extract/src/extract.d" />
+		<Unit filename="../../../xml/attribute.d" />
 		<Unit filename="../../../xml/dom/domt.d" />
-		<Unit filename="../../../xml/dom/dtdt.d" />
+		<Unit filename="../../../xml/error.d" />
+		<Unit filename="../../../xml/input.d" />
+		<Unit filename="../../../xml/isxml.d" />
+		<Unit filename="../../../xml/jcn.d" />
+		<Unit filename="../../../xml/parser.d" />
 		<Unit filename="../../../xml/sax.d" />
-		<Unit filename="../../../xml/std/xmlSlicer.d" />
-		<Unit filename="../../../xml/textInput.d" />
 		<Unit filename="../../../xml/txml.d" />
 		<Unit filename="../../../xml/util/bomstring.d" />
 		<Unit filename="../../../xml/util/buffer.d" />
@@ -42,13 +47,8 @@
 		<Unit filename="../../../xml/util/print.d" />
 		<Unit filename="../../../xml/util/read.d" />
 		<Unit filename="../../../xml/xmlArrayDom.d" />
-		<Unit filename="../../../xml/xmlAttribute.d" />
-		<Unit filename="../../../xml/xmlChar.d" />
-		<Unit filename="../../../xml/xmlError.d" />
 		<Unit filename="../../../xml/xmlLinkDom.d" />
 		<Unit filename="../../../xml/xmlOutput.d" />
-		<Unit filename="../../../xml/xmlParser.d" />
-		<Unit filename="../../../xml/xmlSax.d" />
 		<Extensions>
 			<envvars />
 			<code_completion />

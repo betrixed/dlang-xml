@@ -13,8 +13,8 @@ SAX xml event Template delegates to get call backs on Xml Parse events
 import xml.util.buffer;
 import xml.util.gcstats;
 import xml.txml;
-import xml.xmlParser;
-import xml.textInput;
+import xml.parser;
+import xml.input;
 import xml.util.inputEncode;
 
 import std.variant, std.stdint;
@@ -26,132 +26,92 @@ debug(VERBOSE)
 	import std.stdio;
 }
 
-template XMLSAX(T) {
-	alias xml.txml.xmlt!T	vtpl; // make it short
-	alias vtpl.XmlString		XmlString;
-	alias vtpl.IXmlDocHandler   IXmlDocHandler;
-	alias vtpl.IXmlErrorHandler IXmlErrorHandler;
-	alias vtpl.XmlEvent		    SaxEvent;
-	alias Sax[XmlString]		Namespace; //AA ONLY 1 handler set per name
-	alias XmlParser!T			EventParser;
 
-	// using this saves a lot of trouble with compiler error messages
-	alias void delegate(const SaxEvent s) @system SaxDg;
+class Sax(T) {
+    // experience tells that GC should not be always taken for granted
+    version (GC_STATS)
+    {
+        import xml.util.gcstats;
+        mixin GC_statistics;
+        static this()
+        {
+            setStatsId(typeid(typeof(this)).toString());
+        }
+    }
+    // look me up, key for tag name, and parent tag of assorted child types
+    immutable(T)[]				tagkey_;	 //
+    // array for lookup of common SAX events, an array block. Alternative is an AA, which will test to use even more
 
-	class Sax {
-		// experience tells that GC should not be always taken for granted
-		version (GC_STATS)
-		{
-			import xml.util.gcstats;
-			mixin GC_statistics;
-			static this()
-			{
-				setStatsId(typeid(typeof(this)).toString());
-			}
-		}
-		// look me up, key for tag name, and parent tag of assorted child types
-		immutable(T)[]				tagkey_;	 //
-		// array for lookup of common SAX events, an array block. Alternative is an AA, which will test to use even more
-		SaxDg[SAX.DOC_END]			callbacks_;
-
-		void setInterface(IXmlDocHandler i)
-		{
-			callbacks_[SAX.TAG_START] = &i.startTag;
-			callbacks_[SAX.TAG_EMPTY] = &i.soloTag;
-			callbacks_[SAX.TAG_END] = &i.endTag;
-			callbacks_[SAX.TEXT] = &i.text;
-			callbacks_[SAX.CDATA] = &i.cdata;
-			callbacks_[SAX.COMMENT] = &i.comment;
-			callbacks_[SAX.XML_DEC] = &i.declaration;
-			callbacks_[SAX.XML_PI] = &i.instruction;
-		}
-
-		~this()
-		{
-			callbacks_[0..SAX.DOC_END] = null;
-			tagkey_ = [];
-
-			version (GC_STATS)
-					gcStatsSum.dec();
-		}
-		this()
-		{
-			callbacks_[0..SAX.DOC_END] = null;
-
-			version (GC_STATS)
-				gcStatsSum.inc();
-
-		}
-
-		this(Sax other)
-		{
-			tagkey_ = other.tagkey_;
-			callbacks_[]  = other.callbacks_[];
-			version (GC_STATS)
-				gcStatsSum.inc();
-		}
+    alias void delegate(const XmlEvent!T s)  SaxDg;
+    SaxDg[SAX.DOC_END]			callbacks_;
 
 
-		this(string tagName)
-		{
-			tagkey_ = tagName; // can be null?
-			version (GC_STATS)
-				gcStatsSum.inc();
-		}
+    ~this()
+    {
+        callbacks_[0..SAX.DOC_END] = null;
+        tagkey_ = [];
+        version (GC_STATS)
+                gcStatsSum.dec();
+    }
+    this()
+    {
+        callbacks_[0..SAX.DOC_END] = null;
+        version (GC_STATS)
+            gcStatsSum.inc();
+
+    }
+
+    this(Sax other)
+    {
+        tagkey_ = other.tagkey_;
+        callbacks_[]  = other.callbacks_[];
+        version (GC_STATS)
+            gcStatsSum.inc();
+    }
 
 
-		void opIndexAssign(SaxDg dg, SAX rtype)
-		in {
-			assert(rtype < SAX.DOC_END);
-		}
-		body {
-			callbacks_[rtype] = dg;
-		}
+    this(string tagName)
+    {
+        tagkey_ = tagName; // can be null?
+        version (GC_STATS)
+            gcStatsSum.inc();
+    }
 
-		SaxDg opIndex(SAX rtype)
-		in {
-			assert(rtype < SAX.DOC_END);
-		}
-		body {
-			return callbacks_[rtype];
-		}
 
-		bool didCall(const SaxEvent s)
-		in {
-			assert(s.eventId < SAX.DOC_END);
-		}
-		body {
-			auto dg = callbacks_[s.eventId];
-			if (dg !is null)
-			{
-				dg(s);
-				return true;
-			}
-			return false;
-		}
+    void opIndexAssign(SaxDg dg, SAX rtype)
+    in {
+        assert(rtype < SAX.DOC_END);
+    }
+    body {
+        callbacks_[rtype] = dg;
+    }
 
+    SaxDg opIndex(SAX rtype)
+    in {
+        assert(rtype < SAX.DOC_END);
+    }
+    body {
+        return callbacks_[rtype];
+    }
+
+    bool didCall(const SaxEvent s)
+    in {
+        assert(s.eventId < SAX.DOC_END);
+    }
+    body {
+        auto dg = callbacks_[s.eventId];
+        if (dg !is null)
+        {
+            dg(s);
+            return true;
+        }
+        return false;
+    }
 }
 
-
-/**
-Yet another version of callbacks for XML.
----
-auto tv = new TagVisitor(xmlParser);
-
-auto mytag = new TagBlock("mytag");
-mytag[XmlEvent.TAG_START] = (ref XmlReturn ret){
-
-};
-mytag[XmlEvent.TAG_SINGLEs] = (ref XmlReturn ret){
-
-};
----
-
-*/
-
-/// Enforce all Sax belong to a namespace, help the GC
-class TagSpace
+class TagSpace(T)
 {
+    alias immutable(T)[] XmlString;
 	Sax[XmlString]	tags;
 
 	version (GC_STATS)
@@ -229,15 +189,15 @@ class TagSpace
 	}
 }
 
-class SaxParser : xml.txml.xmlt!T.XmlErrorImpl {
+class SaxParser(T) {
 private:
 
 	static struct ParseLevel
 	{
 		string					tagName;
-		Sax						handlers_;
+		Sax!T					handlers_;
 	};
-	EventParser					parser_;
+	XmlParser!T					parser_;
 
 	Buffer!ParseLevel			parseStack_;
 	Buffer!TagSpace				nsStack_;
@@ -250,7 +210,7 @@ private:
 	bool						handlersChanged_;  // flag to recheck stack TagBlock
 public:
 	Sax							defaults;
-	SaxEvent		    		tag;  // hold current state
+	XmlEvent!T		    		tag;  // hold current state
 	TagSpace					namespace;
 
 	/// Experimental and dangerous for garbage collection. No other references must exist.
@@ -281,7 +241,7 @@ public:
 	this()
 	{
 		parser_ = new XmlParser!T();
-		parser_.errorInterface = this;
+
 		tag = new SaxEvent();
 		parser_.eventReturn = tag;
 		defaults = new Sax();
@@ -390,4 +350,3 @@ public:
     }
 }
 
-}

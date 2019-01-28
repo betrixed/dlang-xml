@@ -1,12 +1,15 @@
 module xml.test.speed;
 
-import xml.txml, xml.xmlError;
+import xml.txml, xml.error;
 import xml.dom.domt;
-import xml.xmlSax;
-import xml.textInput, xml.util.read;
+import xml.sax;
+import xml.input, xml.util.read;
 import xml.xmlArrayDom;
 
 import std.stdio, std.datetime,std.string, std.stdint;
+
+import core.time: Duration;
+import std.datetime.stopwatch : benchmark, StopWatch;
 
 import std.variant, std.conv, std.random, std.file;
 
@@ -15,14 +18,7 @@ alias ArrayDOM.ArrayDomBuilder	ArrayDomBuilder;
 
 import core.memory;
 import xml.util.bomstring;
-
-alias xml.xmlSax.XMLSAX!char	SaxTpl;
-
-alias SaxTpl.Sax		Sax;
-alias SaxTpl.SaxDg		SaxDg;
-alias SaxTpl.SaxParser  SaxParser;
-alias SaxTpl.SaxEvent   SaxEvent;
-alias SaxTpl.TagSpace	TagSpace;
+import stdxml = xml.jcn;
 
 version(GC_STATS)
 {
@@ -56,11 +52,15 @@ struct Book
     string description;
 }
 
+alias Sax!char         Sfx;
+alias Sax!char.SaxDg   SaxDg;
+alias XmlEvent!char    SaxEvent;
+alias TagSpace!char    DgSet;
 
 void nesting_tagvisitor()
 {
-    auto tv = new SaxParser();
-	auto nspace = new TagSpace();
+    auto tv = new SaxParser!char();
+	auto nspace = new DgSet();
 	tv.namespace = nspace;
 
     /// The callbacks will all have different keys, so only need one set, for this kind of document
@@ -94,10 +94,10 @@ void nesting_tagvisitor()
     handler[SAX.XML_DEC] = xmlDecDg;
 
 
-	Sax[]	saveDefaults;   // a  stack of handler sets
+	Sfx[]	saveDefaults;   // a  stack of handler sets
 	auto bce = new  ArrayDomBuilder();
 
-	auto ctags = new Sax("C");
+	auto ctags = new Sfx("C");
 	nspace.put(ctags);
 
 	SaxDg onTagEmpty = (const SaxEvent xml)
@@ -112,7 +112,7 @@ void nesting_tagvisitor()
 	SaxDg onTagStart =  (const SaxEvent xml)
     {
 		saveDefaults ~= tv.defaults;
-		tv.defaults = new Sax(tv.defaults);
+		tv.defaults = new Sfx(tv.defaults);
 		tv.defaults.setInterface(bce);
 		bce.startTag(xml);
 	};
@@ -148,7 +148,7 @@ void nesting_tagvisitor()
 		writeln("B Start");
 	};
 
-	auto A_tags = new Sax("A");
+	auto A_tags = new Sfx("A");
 	nspace.put(A_tags); // this now part of current
 
     A_tags[SAX.TAG_START] = (const SaxEvent xml)
@@ -173,9 +173,13 @@ void nesting_tagvisitor()
 
 
 // Faster way to do it, only set up parser once
-void sax2_speed(string s)
+void sax2_speed(T)(string s)
 {
-	auto visitor = new SaxParser();
+
+	auto visitor = new SaxParser!T();
+	alias XmlEvent!T    SaxEvent;
+    alias TagSpace!T    TSet;
+
     // get a set of callbacks at the current state.
 
     // Check for well-formedness. Note that this is superfluous as it does same as parse.
@@ -185,9 +189,9 @@ void sax2_speed(string s)
     Book[]  books;
 	Book	book;
 
-	TagSpace mainNamespace, bookNamespace;
-	mainNamespace = new TagSpace();
-	bookNamespace = new TagSpace();
+	TSet mainNamespace, bookNamespace;
+	mainNamespace = new TSet();
+	bookNamespace = new TSet();
 
 	scope(exit)
 	{
@@ -239,7 +243,7 @@ void sax2_speed(string s)
 
 }
 
-import xml.std.xmlSlicer;
+import xml.parser;
 void StdXmlRun( string input)
 {
 	// Check for well-formedness
@@ -252,7 +256,7 @@ void StdXmlRun( string input)
     //std.xml.check(input);
 
     // Make a DOM tree
-    auto doc = new Document(input);
+    auto doc = new stdxml.Document(input);
 	//doc.explode();
 }
 
@@ -272,10 +276,10 @@ void StdXmlRun( string input)
 /// Multiple nesting of delegate functions is too awkward to attempt with this,
 /// as it works best when the main context sticks around
 
-void sax1_speed(string s)
+void sax1_speed(T)(string s)
 {
 
-    auto visitor = new SaxParser();
+    auto visitor = new SaxParser!T();
 	//alias xml.parseitem.XmlResult	xr;
 
 
@@ -283,10 +287,11 @@ void sax1_speed(string s)
 	Book book;
 
 /// Two AA references, for 2 tag namespaces
-	TagSpace	bookHandlers, mainHandlers;
+	TagSpace!T	bookHandlers, mainHandlers;
+    alias XmlEvent!T    SaxEvent;
 
-	mainHandlers = new TagSpace();
-	bookHandlers = new TagSpace();
+	mainHandlers = new TagSpace!T();
+	bookHandlers = new TagSpace!T();
 	visitor.namespace = mainHandlers;
 
 	scope(exit)
@@ -349,9 +354,9 @@ class storeErrorMsg : DOMErrorHandler
 
 double timedSeconds(ref StopWatch sw)
 {
-    auto duration = sw.peek();
-
-    return duration.to!("seconds",double)();
+    auto d = sw.peek();
+    // 100 ns hecto-nanoseconds 10^7
+    return d.total!"hnsecs" * 1e-7;
 }
 
 void fullCollect()
@@ -409,7 +414,7 @@ void runTests(string inputFile, uintptr_t runs)
                     sw.start();
                     for(i = 0;  i < runs; i++)
                     {
-                        sax1_speed(s);
+                        sax1_speed!char(s);
                     }
                     sw.stop();
                     break;
@@ -418,7 +423,7 @@ void runTests(string inputFile, uintptr_t runs)
                     sw.start();
                     for(i = 0;  i < runs; i++)
                     {
-                        sax2_speed(s);
+                        sax2_speed!char(s);
                     }
                     sw.stop();
                     break;
@@ -520,14 +525,15 @@ void emptyDocElement()
 
     doc =`<?xml version="1.0" encoding="utf-8"?><main test='"what&apos;s up doc?"'/>`;
 
+
 	SaxDg xdg = (const SaxEvent xml)
     {
         // main item
         writeln("Got main test=",xml.attributes.get("test"));
     };
 
-    auto tv = new SaxParser();
-	auto handler = new TagSpace();
+    auto tv = new SaxParser!char();
+	auto handler = new DgSet();
 
 	scope(exit)
 	{
@@ -552,8 +558,8 @@ void testTicket8()
     {
         try
         {
-            auto tv = new SaxParser();
-			auto handler = new TagSpace();
+            auto tv = new SaxParser!char();
+			auto handler = new DgSet();
 
 			scope(exit)
 			{

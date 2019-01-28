@@ -69,7 +69,6 @@ public:
 /**
 
 Data is provided from any source by the $(D MoreDataDgate).
-An optional $(I EmptyNotify) delegate is called if the InputFileBuffer!(T) returns false.
 Data can be pushed back onto an input stack.
 The input stack is used up first before the primary source.
 This implementation takes the step of having popFront set the
@@ -91,8 +90,7 @@ class InputCharRange(T)
 {
     /// Delegate to refill the buffer with data,
     alias ReadBuffer!(T)	DataFiller;
-    /// Delegate to notify when empty becomes true.
-    alias void delegate() EmptyNotify;
+
     protected
     {
 		T[]					stack_; // push back
@@ -104,7 +102,7 @@ class InputCharRange(T)
         size_t						nextpos_; // index into string
 
         DataFiller	        df_; // buffer filler
-        EmptyNotify			onEmpty_;
+
         ulong				srcRef_;  // original source reference, if any
 
         /// push stack character without changing value of front_
@@ -163,16 +161,7 @@ public:
 	void close() {
         df_.close();
 	}
-    /// notifyEmpty read property
-    @property EmptyNotify notifyEmpty()
-    {
-        return onEmpty_;
-    }
-    /// notifyEmpty write property
-    @property void notifyEmpty(EmptyNotify notify)
-    {
-        onEmpty_ = notify;
-    }
+
     /// indicate position of datastream in original source
     @property final ulong sourceReference()
     {
@@ -302,8 +291,6 @@ final void convertPushFront(U : U[])(const(U)[] s)
             if (empty_)
             {
                 front_ = 0;
-                if (onEmpty_)
-                    onEmpty_();
             }
         }
     }
@@ -451,32 +438,11 @@ protected:
     enum {INTERNAL_BUF = 1000};
 
 public:
-	version (GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
-	this()
-	{
-		version(GC_STATS)
-			gcStatsSum.inc();
-	}
-
-	~this()
-	{
-		version(GC_STATS)
-			gcStatsSum.dec();
-	}
     this(const(T)[] s)
     {
 		super();
         src_ = s;
         eof_ = (s.length == 0);
- 		version(GC_STATS)
-			gcStatsSum.inc();
     }
     override bool fillData(ref const(dchar)[] data, ref ulong sref)
     {

@@ -42,7 +42,26 @@ enum SAX {
     ENUM_LENGTH, /// size of array to hold all the other values
 }
 
+class XmlEvent(T) {
+    SAX				    eventId;
+    immutable(T)[]		data;
+    AttributeMap!T      attributes;
+    Object              obj;
+};
 
+interface IBuildDom(T) {
+    void startTag(const XmlEvent!T evt);
+    void soloTag(const XmlEvent!T evt);
+    void endTag(const XmlEvent!T evt);
+    void text(const XmlEvent!T evt);
+    void declaration(const XmlEvent!T evt);
+    void comment(const XmlEvent!T evt);
+    void cdata(const XmlEvent!T evt);
+    void instruction(const XmlEvent!T evt);
+    void startDoctype(const XmlEvent!T evt);
+    void endDoctype(const XmlEvent!T evt);
+    void notation(const XmlEvent!T evt);
+}
 
 enum string xmlAttributeNormalize = "attribute-normalize";
 enum string xmlCharFilter = "char-filter";
@@ -53,12 +72,7 @@ enum kErrorMissingEndTag = "Missing end >";
 enum kErrorMissingSpace = "Missing space character";
 enum kErrorBadEntity = "Expected entity reference";
 
-class XmlEvent(T) {
-    SAX				    eventId;
-    immutable(T)[]		data;
-    AttributeMap!T      attributes;
-    Object              obj;
-};
+
 
 
 
@@ -772,6 +786,15 @@ class XmlParser(T) {
     Exception incompleteTag() {
         throw errors_.makeException("Incomplete Tag");
     }
+
+    XmlEvent!T results() {
+        return results_;
+    }
+	void parseOne()
+	{
+		eventMode_ = false;
+		stateDg_();
+	}
     private final void doStartTag()
     {
         state_ = PState.P_ELEMENT;
@@ -2212,6 +2235,19 @@ class XmlParser(T) {
     {
         return (entity !is null) && (entity.etype_ == EntityType.General);
     }
+	bool isHtml() @property
+	{
+		return isHTML_;
+	}
+
+	void isHtml(bool val) @property
+	{
+		isHTML_ = val;
+	}
+    intptr_t tagDepth() const
+    {
+        return stackElementDepth + elementDepth;
+    }
 
     final void checkBalanced()
     {
@@ -3095,9 +3131,10 @@ class XmlParser(T) {
             }
             else if (isOpenSquare())
             {
-                dtd_.isInternal_ = true;
+
                 if (eventMode_)
                 {
+                    dtd_.isInternal_ = true;
                     results_.eventId = SAX.DOC_TYPE;
                     results_.obj = dtd_;
                     eventDg_(results_);

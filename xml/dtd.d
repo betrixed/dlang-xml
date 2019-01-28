@@ -574,7 +574,7 @@ template XMLDTD(T) {
 			}
 			lastItem = s.fel;
 		}
-		return val.idup;
+		return sxml!T.data(val).idup;
 	}
 
 	pure bool isURIScheme(XmlString scheme)

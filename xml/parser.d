@@ -3,6 +3,7 @@
 module xml.parser;
 
 import std.array;
+import std.ascii;
 import std.stdint;
 import xml.isxml;
 import xml.entity;
@@ -20,6 +21,7 @@ import std.stdio;
 import std.variant;
 import std.utf;
 
+version = ParseDocType;
 
 enum SAX {
     TAG_START, //0
@@ -47,10 +49,15 @@ enum string xmlCharFilter = "char-filter";
 enum string xmlNamespaces = "namespaces";
 enum string xmlFragment = "fragment";
 
+enum kErrorMissingEndTag = "Missing end >";
+enum kErrorMissingSpace = "Missing space character";
+enum kErrorBadEntity = "Expected entity reference";
+
 class XmlEvent(T) {
     SAX				    eventId;
     immutable(T)[]		data;
     AttributeMap!T      attributes;
+    Object              obj;
 };
 
 
@@ -66,7 +73,6 @@ alias bool delegate(ref const(dchar)[] buf) MoreInputDg; // For a streamed datas
 
 class XmlParser(T) {
     private {
-
         alias  sxml!(T).XmlBuffer XmlBuffer;
         alias  bool function(dchar c) pure	XmlCharTypeFn;
         alias  immutable(T)[] XmlString;
@@ -98,6 +104,7 @@ class XmlParser(T) {
 		int					parenDepth;
 		int					docDeclare;
 		dchar				front = 0;
+		dchar[]             backStack;
 		bool				empty  = true;
 
 		double				docVersion_;
@@ -106,7 +113,7 @@ class XmlParser(T) {
 		// a single block of unparsed xml
 
 		const(dchar)[]		streamData;	// dynamic stream data
-		MoreInputDg			inputDg_;		// more stream data
+
 		uintptr_t			fpos;		 // position in buffer
 		EntityData!T		entity;
 		bool				scopePop;
@@ -117,7 +124,8 @@ class XmlParser(T) {
 		bool				minVersion11_;
 		CharFilter			doFilter_;
 
-
+		ReadBuffer!(dchar)  fillSource_;    // current data puller
+        MoreInputDg			inputDg_;		// delegate uses data puller
 
 		this(EntityData!T ed, bool doPop = false)
 		{
@@ -540,6 +548,9 @@ class XmlParser(T) {
     final void parseAll(XmlEvent!T evt = null)
 	{
 		//eventMode_ = true;
+		scope(exit) {
+            parserHalt();
+		}
 		if (evt !is null)
 			results_ = evt;
 		try {
@@ -576,7 +587,7 @@ class XmlParser(T) {
 				return "End";
 		}
 	}
-	final XmlError stageError(string msg, XmlErrorLevel level = XmlErrorLevel.FATAL)
+	final XmlError stageError(string msg, XmlErrorLevel level = XmlErrorLevel.ERROR)
 	{
 		XmlError e = new XmlError(msg, level);
 		e.addMsg(format("In parse of %s",stageString()));
@@ -586,10 +597,6 @@ class XmlParser(T) {
     Exception makeEmpty()
     {
         return errors_.makeException("Unexpected end to parse source");
-    }
-
-    void doDocType() {
-        throw errors_.makeException("DOCTYPE not supported");
     }
 
     void doProlog()
@@ -770,7 +777,7 @@ class XmlParser(T) {
         state_ = PState.P_ELEMENT;
         int attSpaceCt = 0;
         auto attrCount = 0;
-        results_.attributes.length = 0;
+        results_.attributes.reset();
 
         //auto prepareAttributes = (evt_.nameEvent.startTagDg_ !is null) || (evt_.nameEvent.soloTagDg_ !is null);
         void setResults(SAX id)
@@ -834,7 +841,7 @@ class XmlParser(T) {
                                 throw mismatchTag();
                             munchSpace(); // possible space after end tag name!
                             if (empty || (front != '>'))
-                                throw missingEndBracket();
+                                throw missingEndTag();
                             markupDepth--;
                             elementDepth--; // cancel earlier increment
                             popFront();
@@ -896,15 +903,15 @@ class XmlParser(T) {
                         {
                             if (attrValue_ == "preserve")
                             {
-
+                                //TODO: Remember and take future action
                             }
                             else if (attrValue_ == "default")
                             {
-
+                                //TODO: Remember and take future action
                             }
                             else
                             {
-                                errors_.makeException("xml:space must equal 'preserve' or 'default'",XmlErrorLevel.ERROR);
+                                throw errors_.makeException("xml:space must equal 'preserve' or 'default'",XmlErrorLevel.ERROR);
                             }
                         }
                         /// TODO: actually implement space instructions?
@@ -927,7 +934,7 @@ class XmlParser(T) {
             eventId = SAX.TEXT;
                 //data = bufContent_.data.idup;
             data = sxml!T.data(bufContent_).idup;
-            attributes.length = 0;
+            attributes.reset();
         }
         if (eventMode_) {
             eventDg_(results_);
@@ -944,24 +951,26 @@ class XmlParser(T) {
         return format("Unknown Entity %s",ename);
     }
 
+
     Exception badEntityReference() {
-        return errors_.makeException("Expected entity reference");
+        return errors_.makeException(kErrorBadEntity);
     }
     Exception missingQuote() {
         return errors_.makeException("Missing quote character");
     }
 
+
     Exception missingSpace() {
-        return errors_.makeException("Missing space character");
+        return errors_.makeException(kErrorMissingSpace);
     }
 
     Exception missingValue() {
         return errors_.makeException("Missing attribute value");
     }
 
-    enum missingEndTag = "Missing end >";
-    Exception missingEndBracket() {
-        return errors_.makeException(missingEndTag);
+
+    Exception missingEndTag() {
+        return errors_.makeException(kErrorMissingEndTag);
     }
 
     Exception mismatchTag() {
@@ -1001,7 +1010,7 @@ class XmlParser(T) {
             // has to be end
             munchSpace();
             if (empty || front != '>')
-                throw missingEndBracket();
+                throw missingEndTag();
             markupDepth--;
             elementDepth--;
             popFront();
@@ -1011,7 +1020,7 @@ class XmlParser(T) {
             {
                 eventId = SAX.TAG_END;
                 data = tag_;
-                attributes.length = 0;
+                attributes.reset();
             }
             if (eventMode_) {
                 eventDg_(results_);
@@ -1082,7 +1091,7 @@ class XmlParser(T) {
                         else
                         {
                             /// trick conformance issue
-                            errors_.pushError(missingEndTag, XmlErrorLevel.FATAL);
+                            errors_.pushError(kErrorMissingEndTag, XmlErrorLevel.FATAL);
                             throw errors_.makeException(badCharMsg(test));
                         }
                 } // end switch
@@ -1118,7 +1127,21 @@ class XmlParser(T) {
                             continue;
                         }
                         // there's no dtd entity in this version
-                        throw errors_.makeException(unknownEntityMsg(tag_));
+                        if (!pushEntity(tag_, false))
+                        {
+                            /// Generate character data, then Entity, then proceed again with content.
+                            /// This requires an event stack, if call model is to be kept
+                            if (inCharData)
+                            {
+                                returnTextContent(); // return content so far
+                            }
+                            //TODO? make a user supplied entity find mechanic?
+                            if (dtd_ !is null && dtd_.paramEntityMap.length > 0) // Test 2180
+                                errors_.pushError(unknownEntityMsg(tag_),XmlErrorLevel.INVALID);
+                            else
+                                throw errors_.makeException(unknownEntityMsg(tag_));
+                        }
+                        continue;
 
                     }
                 }
@@ -1194,7 +1217,7 @@ class XmlParser(T) {
             eventId = SAX.COMMENT;
             data = sxml!T.data(bufContent_).idup;
                 //bufContent_.data.idup;
-            results_.attributes.length = 0;
+            results_.attributes.reset();
         }
         if (eventMode_) {
             eventDg_(results_);
@@ -1288,6 +1311,7 @@ class XmlParser(T) {
         {
             eventId = SAX.XML_PI;
             data = target;
+            attributes.reset();
             attributes.push(target,sxml!T.data(bufContent_).idup);
         }
         if(eventMode_) {
@@ -1348,7 +1372,7 @@ class XmlParser(T) {
         {
             eventId = SAX.DOC_END;
             data = null;
-            attributes.length = 0;
+            attributes.reset();
         }
         state_ = PState.P_END;
         stateDg_ = null;
@@ -1387,7 +1411,7 @@ class XmlParser(T) {
                 {
                     eventId = SAX.CDATA;
                     data = sxml!T.data(bufContent_).idup;
-                    attributes.length = 0;
+                    attributes.reset();
                 }
                 if (eventMode_) {
                     eventDg_(results_);
@@ -1404,6 +1428,19 @@ class XmlParser(T) {
         throw makeEmpty();
     }
 
+    void parserHalt() {
+        if (contextStack_.length > 0) {
+            // close fill sources like files
+            foreach(ctx ; contextStack_) {
+                if (ctx.fillSource_) {
+                    ctx.fillSource_.close();
+                }
+            }
+        }
+        if (fillSource_) {
+            fillSource_.close();
+        }
+    }
     final void getAttributeValue(ref immutable(T)[] val)
     {
         munchSpace();
@@ -1877,13 +1914,16 @@ class XmlParser(T) {
 		ctx_.squareDepth = squareDepth;
 		ctx_.parenDepth = parenDepth;
 		ctx_.docDeclare = docDeclare;
-		ctx_.inputDg_ = inputDg_;
 
 		ctx_.front = front;
 		ctx_.empty = empty;
+		ctx_.backStack = backStack;
 		ctx_.docVersion_ = docVersion_;
 
 		ctx_.streamData = streamData_;
+		ctx_.fillSource_ = fillSource_;
+		ctx_.inputDg_ = inputDg_;
+
 		ctx_.fpos = fpos;
 
 		ctx_.entity = entity;
@@ -1905,6 +1945,7 @@ class XmlParser(T) {
 		fpos = 0;
 
 		streamData_ = null;
+		fillSource_ = null;
         inputDg_ = null;
 
         markupDepth = 0;
@@ -1961,6 +2002,12 @@ class XmlParser(T) {
             slen--;
 			auto ctx_ = contextStack_[slen];
 
+
+			// dispose of current fillsource_ thoughtfully.
+            if (fillSource_) {
+                fillSource_.close();
+            }
+
 			markupDepth += ctx_.markupDepth;
 			elementDepth += ctx_.elementDepth;
 			squareDepth += ctx_.squareDepth;
@@ -1975,12 +2022,14 @@ class XmlParser(T) {
 			}
 
 			inputDg_ = ctx_.inputDg_;
+            fillSource_ = ctx_.fillSource_;
+            streamData_ = ctx_.streamData;
 
 			front = ctx_.front;
 			empty = ctx_.empty;
 			docVersion_ = ctx_.docVersion_;
+            backStack = ctx_.backStack;
 
-			streamData_ = ctx_.streamData;
 			fpos = ctx_.fpos;
 			entity = ctx_.entity;
 			scopePop = ctx_.scopePop;
@@ -2112,7 +2161,7 @@ class XmlParser(T) {
             else
                 throw makeUnknownEntity(dname);
         }
-        if (ge.status_ == EntityData!T.Expanded)
+        if (ge.status_ == EntityStatus.Expanded)
             return ge;
 
 		if (isAttribute)
@@ -2223,12 +2272,12 @@ class XmlParser(T) {
             }
 
         }
-        if (entity.status_ == EntityData!T.Expanded)
+        if (entity.status_ == EntityStatus.Expanded)
         {
             reftype = entity.reftype_;
             return true;
         }
-        if (entity.status_ < EntityData!T.Found)
+        if (entity.status_ < EntityStatus.Found)
         {
             if (entity.ndataref_.length > 0) // get the notation
             {
@@ -2241,13 +2290,13 @@ class XmlParser(T) {
                 {
                     if (validate())
                         errors_.pushError(text("Notation not declared: ", entity.ndataref_),XmlErrorLevel.INVALID);
-                    entity.status_ = EntityData!T.Failed;
+                    entity.status_ = EntityStatus.Failed;
                     return true; // need to check replaced flag!
                 }
                 else
                 {
                     // TODO: what do do with notations?
-                    entity.status_ = EntityData!T.Expanded;
+                    entity.status_ = EntityStatus.Expanded;
                     return true;
                 }
             }
@@ -2269,7 +2318,7 @@ class XmlParser(T) {
             }
             else
             {
-				entity.status_ = EntityData!T.Expanded;
+				entity.status_ = EntityStatus.Expanded;
 				entity.value_ = null;
 				return true;
             }
@@ -2277,7 +2326,7 @@ class XmlParser(T) {
         // for checking well formed for standalone=yes,
         // need to fail if the original entity was internal
 
-        if (entity.status_ == EntityData!T.Found) // can be empty!
+        if (entity.status_ == EntityStatus.Found) // can be empty!
         {
             if (!stk.put(entity.name_))
             {
@@ -2328,11 +2377,11 @@ class XmlParser(T) {
             }
 
             entity.value_ = tempValue;
-            entity.status_ = EntityData!T.Expanded;
+            entity.status_ = EntityStatus.Expanded;
             stk.remove(entity.name_);
             return true;
         }
-		else if (entity.status_ == EntityData!T.Expanded)
+		else if (entity.status_ == EntityStatus.Expanded)
 		{
 			return true;
 		}
@@ -2352,26 +2401,21 @@ class XmlParser(T) {
 		if (!findSystemPath(systemPaths_,uri,uri))
 		{
 			errors_.pushError(format( "DTD System Entity %s not found",uri), XmlErrorLevel.ERROR);
-			entity.status_ = EntityData!T.Failed;
+			entity.status_ = EntityStatus.Failed;
 			return false;
 		}
 
 		auto ep = prepChildParser();
-		auto sf = new XmlFileReader(File(uri,"r"));
+		auto sf = new XmlFileReader(uri);
 		ulong	pos;
 
 		scope(exit)
 		{
 			ep.explode();
-			destroy(ep);
-			destroy(sf);
-		}
-		bool getData(ref const(dchar)[] data)
-		{
-			return sf.fillData(data,pos);
 		}
 
-		ep.initSource(&getData);
+		ep.fillSource(sf);
+
         if (ep.matchInput("<?xml"))
         {
             ep.markupDepth++;
@@ -2385,10 +2429,10 @@ class XmlParser(T) {
 			entity.value_ = sxml!T.data(edata).idup;
 			entity.isInternal_ = false;
 			entity.baseDir_ = dirName(uri);
-			entity.status_ = EntityData!T.Found;
+			entity.status_ = EntityStatus.Found;
 		}
 		else {
-			entity.status_ = EntityData!T.Expanded;
+			entity.status_ = EntityStatus.Expanded;
 			entity.value_ = null;
 		}
 		return true;
@@ -2644,12 +2688,8 @@ class XmlParser(T) {
 
     void explode()
 	{
-		if (dtd_ !is null)
-		{
-			dtd_.explode();
-			dtd_ = null;
-		}
-		contextStack_.length = 0;
+        dtd_ = null; // dtd can be shared
+		parserHalt();
 		destroy(this);
 	}
     final void expectEntityName(ref XmlString ename)
@@ -2669,7 +2709,7 @@ class XmlParser(T) {
             return null;
         }
 
-        if (pe.status_ < EntityData!T.Expanded)
+        if (pe.status_ < EntityStatus.Expanded)
         {
 			// expand by replacing its internal entities recursively
             if (!stk.put(peName))
@@ -2677,7 +2717,7 @@ class XmlParser(T) {
                 errors_.pushError(format("Recursion for entity: %s ",peName),XmlErrorLevel.ERROR);
                 return null;
             }
-            if (pe.status_ == EntityData!T.Unknown)
+            if (pe.status_ == EntityStatus.Unknown)
             {
                 auto sys_uri = to!string(pe.src_.systemId_);
 
@@ -2725,7 +2765,7 @@ class XmlParser(T) {
                 }
                 pe.value(sxml!T.data(buf1).idup);
             }
-            pe.status_ = EntityData!T.Expanded;
+            pe.status_ = EntityStatus.Expanded;
             stk.remove(peName);
         }
         return pe;
@@ -2755,7 +2795,7 @@ class XmlParser(T) {
             reftype = RefTagType.UNKNOWN_REF;
             return false;
         }
-        if (entity.status_ == EntityData!T.Expanded)
+        if (entity.status_ == EntityStatus.Expanded)
         {
             value = entity.value_;
             reftype = entity.reftype_;
@@ -2775,14 +2815,14 @@ class XmlParser(T) {
 					throw errors_.makeException(format("Referenced unparsed data in entity %s", getEntityName()),XmlErrorLevel.ERROR);
 
 				entity.isInternal_ = false;
-				entity.status_ = EntityData!T.Expanded;
+				entity.status_ = EntityStatus.Expanded;
 				entity.reftype_ = cast(RefTagType) reftype;
 				break;
 			default:
 				break;
         }
 
-        if (entity.status_ == EntityData!T.Expanded)
+        if (entity.status_ == EntityStatus.Expanded)
         {
             //Entity xe = new Entity(entity);
             //map.setNamedItem(xe);
@@ -2912,7 +2952,7 @@ class XmlParser(T) {
 	@property double xmlVersion() const {
 		return filterVersion_;
 	}
-bool attributeTextReplace(ref XmlBuffer app, uint callct = 0)
+    bool attributeTextReplace(ref XmlBuffer app, uint callct = 0)
     {
 		bool result = false; // flag if whitespace replace or entity expansion
 	NEXT_CHAR:
@@ -3016,5 +3056,1693 @@ bool attributeTextReplace(ref XmlBuffer app, uint callct = 0)
         }
         return true;
     }
+
+ version(ParseDocType) {
+    enum DocEndType { noDocEnd, singleDocEnd, 	doubleDocEnd };
+    void doDocType()
+    {
+        XmlString	xmlName;
+        bool hadDeclaration = hasDeclaration;
+        inDTD_ = true;
+        hasDeclaration = true;
+
+        int spacect = munchSpace();
+
+        if (! getXmlName(xmlName) )
+            throw errors_.makeException("DOCTYPE name expected");
+        if (!spacect)
+            throw errors_.makeException("Need space before DOCTYPE name");
+        munchSpace();
+        if (empty)
+            throw makeEmpty();
+        dtd_ = new DocTypeData!T();
+        dtd_.id_ = xmlName;
+        for(;;)
+        {
+            munchSpace();
+            if (matchInput('>'))
+                break;
+            if (getExternalUri(dtd_.src_))
+            {
+                if (!hadDeclaration)
+                    isStandalone_ = false;
+                else
+                {
+                    // TODO: check valid declaration?
+                }
+                munchSpace();
+
+            }
+            else if (isOpenSquare())
+            {
+                dtd_.isInternal_ = true;
+                if (eventMode_)
+                {
+                    results_.eventId = SAX.DOC_TYPE;
+                    results_.obj = dtd_;
+                    eventDg_(results_);
+                }
+                docTypeInnards(DocEndType.singleDocEnd);
+                if (eventMode_) {
+                    results_.eventId = SAX.DOC_END;
+                    results_.obj = dtd_;
+                    eventDg_(results_);
+                }
+            }
+            else
+            {
+                throw errors_.makeException("Unknown DTD data");
+            }
+        }
+        if (dtd_.src_.systemId_ !is null)
+        {
+            parseExternalDTD(dtd_.src_);
+        }
+        verifyGEntity();
+        inDTD_ = false;
+    }
+
+    private bool getExternalUri(ref ExternalID!T ext)
+    {
+        ExternalID!T result;
+        int spacect;
+
+        bool doSystem()
+        {
+            spacect = munchSpace();
+            XmlString opt;
+
+            if (getSystemLiteral(opt))
+            {
+                if (spacect == 0)
+                    throw errors_.makeException("Need space before SYSTEM uri");
+                if (opt.length == 0)
+                    ext.systemId_ = "";
+                else
+                    ext.systemId_ = opt;
+                return true;
+            }
+            return false;
+        }
+
+        if (matchInput("PUBLIC"))
+        {
+            spacect = munchSpace();
+            XmlString opt;
+            if (!getPublicLiteral(opt))
+                throw errors_.makeException("Expected a PUBLIC name");
+            if (spacect == 0)
+                throw errors_.makeException("Need space before PUBLIC name");
+            doSystem();
+            ext.publicId_ = opt;
+            return true;
+        }
+        else if (matchInput("SYSTEM"))
+        {
+            doSystem();
+            return true;
+            //if (!doSystem()) return false;
+        }
+        return false;
+    }
+    private bool getSystemLiteral(ref XmlString opt)
+    {
+        if (empty)
+            throw makeEmpty();
+
+        if ((front == '\"') || (front == '\''))
+        {
+            unquoteValue(opt);
+            if (opt.length == 0)
+            {
+                return true;
+            }
+            //throwNotWellFormed("Empty SYSTEM value");
+        }
+        else
+        {
+            return false;
+        }
+        if (opt.indexOf('#') >= 0)
+            throw errors_.makeException("SYSTEM URI with fragment '#'",XmlErrorLevel.ERROR);
+        return true;
+    }
+
+    bool getPublicLiteral(ref XmlString opt)
+    {
+        if (!empty && (front == '\"' || front == '\''))
+        {
+            unquoteValue(opt);
+            if (opt.length == 0)
+            {
+                opt = "";
+                return true;
+            }
+        }
+        else
+            throw errors_.makeException("Quoted PUBLIC id expected");
+
+        int  ct = 0;
+        sxml!T.reset(bufAttr_);
+        auto hasSpace = false;
+        foreach(dchar c; opt)
+        {
+            switch(c)
+            {
+                case 0x20:
+                case 0x0A:
+                case 0x0D: //0xD already filtered ?
+                    hasSpace = true;
+                    break;
+                default:
+                    if (!isPublicChar(c))
+                        throw errors_.makeException(format("Bad character %x in PUBLIC Id %s", c, opt));
+                    if (hasSpace)
+                    {
+                        if (ct > 0)
+                            bufAttr_ ~= ' ';
+                        hasSpace = false;
+                    }
+                    ct++;
+                    bufAttr_ ~= c;
+                    break;
+            }
+        }
+        opt = sxml!T.data(bufAttr_).idup;
+        return true;
+    }
+
+    final bool isOpenSquare()
+    {
+        if (!empty && front=='[')
+        {
+            squareDepth++;
+            popFront();
+            return true;
+        }
+        return false;
+    }
+
+    private void docTypeInnards(DocEndType endMatch)
+    {
+        XmlString keyword;
+
+        while(!empty)
+        {
+            // before checking anything, see if character reference need decoding
+            if (front == '&')
+            {
+                uint radix = void;
+                front = expectedCharRef(radix);
+            }
+            munchSpace();
+            final switch(endMatch)
+            {
+                case DocEndType.noDocEnd:
+                    if (empty)
+                        return;
+                    break;
+                case DocEndType.singleDocEnd:
+                    if (isCloseSquare())
+                        return;
+                    break;
+                case DocEndType.doubleDocEnd:
+                    if (isSquaredEnd())
+                        return;
+                    break;
+            }
+            if (isOpenBang())
+            {
+                // A DocDeclaration of some kind
+                docDeclare++;
+
+                itemCount++;
+                if (isOpenSquare())
+                {
+                    parseDtdInclude();
+                    continue;
+                }
+                if (empty)
+                    throw makeEmpty();
+                if (matchInput("--"))
+                {
+                    parseComment(); // TODO: stick comment somewhere ?, child of DocumentType? event?'
+                }
+                else {
+                    // A key word expected
+                    if (!getUpperKeyWord(keyword))
+                        throw errors_.makeException(format("Uppercase key word expected, not %s", keyword));
+                    switch(keyword)
+                    {
+                    case "ENTITY":
+                        parseEntity();
+                        break;
+                    case "ELEMENT":
+                        parseDtdElement();
+                        break;
+                    case "ATTLIST":
+                        parseAttList();
+                        break;
+                    case "NOTATION":
+                        parseDtdNotation();
+                        break;
+                    default:
+                        throw errors_.makeException(format("DTD unhandled keyword %s ",keyword));
+                    }
+                }
+                errors_.checkErrorStatus();
+                continue;
+            } // not a <! thing
+            else if (matchInput('%'))
+            {
+                if (!pushEntityContext(false))
+                    if (!dtd_.isInternal_)
+                        throw errors_.makeException("Undefined parameter entity in external entity");
+            }
+            else if (isPIStart())
+            {
+                doProcessingInstruction();
+                itemCount++;
+            }
+            else if (empty)
+            {
+                break;
+            }
+            else
+            {
+                // no valid match
+                if ((endMatch == DocEndType.doubleDocEnd) && matchInput(']'))
+                    throw errors_.makeException("Expected ]]>");
+                throw errors_.makeException(text("DTD unknown declaration: ", getSourceContext()));
+            }
+        }
+        checkBalanced();
+    }
+    private final bool isCloseSquare()
+    {
+        if (!empty && front==']')
+        {
+            popFront();
+            squareDepth--;
+            return true;
+        }
+        return false;
+    }
+    /// adjust counts for ]]>
+    private final bool isSquaredEnd()
+    {
+        if (!empty && front == ']')
+        {
+            squareDepth--;
+            popFront();
+            if (!empty && front == ']')
+            {
+                squareDepth--;
+                popFront();
+                if (!empty && front == '>')
+                {
+                    markupDepth--;
+                    popFront();
+                    return true;
+                }
+                if (!empty)
+                {
+                    squareDepth += 2;
+                    unpop("]]");
+                    return false;
+                }
+                throw errors_.makeException("Expected ']]>'");
+            }
+            else
+            {
+                squareDepth++;
+                unpop(']');
+                return false;
+            }
+        }
+        return false;
+    }
+
+    XmlError notAllowedHere(immutable(T)[] s) {
+        return errors_.makeException(format("%s is not allowed in internal subset",s));
+    }
+
+    private final bool isOpenBang()
+    {
+        if (!empty && front == '<')
+        {
+            markupDepth++;
+            popFront();
+            if (!empty && front == '!')
+            {
+                popFront();
+                return true;
+            }
+            markupDepth--;
+            unpop('<');
+        }
+        return false;
+    }
+
+    XmlError expectedInclude() {
+        return errors_.makeException("INCLUDE or IGNORE expected");
+    }
+
+    void parseDtdInclude()
+    {
+		XmlString keyword;
+        munchSpace();
+        if (matchInput('%'))
+        {
+            pushEntityContext();
+            munchSpace();
+        }
+        if (!getUpperKeyWord(keyword))
+        {
+            throw expectedInclude();
+        }
+
+        munchSpace();
+        if (!isOpenSquare())
+        {
+            throw errors_.makeException("expected '['");
+        }
+		bool isInternalContext =  (entity is null || entity.isInternal_);
+
+        if (keyword == "INCLUDE")
+        {
+            if (dtd_.isInternal_ && isInternalContext)
+                throw notAllowedHere(keyword);
+            munchSpace();
+            docTypeInnards(DocEndType.doubleDocEnd);
+        }
+        else if (keyword == "IGNORE")
+        {
+            if (dtd_.isInternal_ && isInternalContext)
+                throw notAllowedHere(keyword);
+            munchSpace();
+            ignoreDocType();
+        }
+        else
+        {
+			errors_.pushError(format("Unexpected %s",keyword),XmlErrorLevel.FATAL);
+            throw expectedInclude();
+        }
+    }
+    /// Count for starting <![
+    final bool isSquaredStart(int extra = 1)
+    {
+        if (!isOpenBang())
+            return false;
+        if (empty || front != '[')
+        {
+            // undo
+            markupDepth--;
+            unpop("<!");
+            return false;
+        }
+        popFront();
+        squareDepth += extra;
+        return true;
+    }
+    final bool getUpperKeyWord(ref XmlString ukw)
+    {
+        XmlBuffer kw;
+        while(true)
+        {
+            if (empty)
+                throw makeEmpty();
+            dchar test = front;
+            if (std.ascii.isUpper(test))
+            {
+                kw ~= test;
+                popFront();
+            }
+            else {
+                // got to be whitespace or a separator. Alpha numeric is likely wrong.
+                ukw = sxml!T.data(kw).idup;
+                if (std.ascii.isAlphaNum(test) || (ukw.length == 0))
+                    throw errors_.makeException(format("Upper case keyword expected: %s + %s", ukw, test));
+                return ukw.length > 0;
+            }
+        }
+    }
+    void parseEntity()
+    {
+        int spacect1 = munchSpace(); // after keyword
+        dchar test;
+        EntityData!T toDestroy; // if not wanted
+
+        bool isPE = matchInput('%');
+        int spacect2 = munchSpace();
+
+        if ((spacect1==0) || (isPE && (spacect2==0)))
+            throw errors_.makeException("missing space in Entity definition");
+
+        EntityData!T contextEntity = (isPE ? entityContext() : null);
+        XmlString ename;
+        if (!getXmlName(ename))
+        {
+            throw errors_.makeException("Entity must have a name");
+        }
+        spacect2 = munchSpace();
+        if (namespaceAware_ && (ename.indexOf(':') >= 0))
+        {
+            errors_.makeException(format("Entity Name %s must not contain a ':' with namespace aware parse ", ename));
+        }
+
+        /*string sys_ref;
+        string public_ref;
+        string ndata_ref;*/
+
+        EntityData!T edef = dtd_.getEntity( ename, isPE);
+
+        if (isStandalone_ && isPE)
+            dtd_.undeclaredInvalid_ = true;
+
+        EntityType etype = isPE ? EntityType.Parameter : EntityType.General;
+        if (edef is null)
+        {
+            edef = new EntityData!T(ename, etype);
+            edef.isInternal_ = dtd_.isInternal_;
+            edef.context_ = contextEntity;
+
+            if (isPE)
+                dtd_.paramEntityMap[ename] = edef;
+            else
+                dtd_.generalEntityMap[ename] = edef;
+        }
+        else
+        {
+            // Done this one before. Parse, but do not overwrite the first encountered version.
+            edef = new EntityData!T(ename, etype);
+            toDestroy = edef;
+            // created, check, but afterwards forget it.
+            // TODO: report with warning ?
+        }
+        scope(exit)
+        {
+            if (toDestroy !is null)
+            {
+                destroy(toDestroy);
+            }
+        }
+        ExternalID!T extID;
+
+        if (getExternalUri(extID))
+        {
+            if (extID.systemId_ is null)
+                throw errors_.makeException("Entity ExternalID PUBLIC needs SystemLiteral");
+            edef.src_ = extID;
+            spacect1 = munchSpace();
+            XmlString ndata_name;
+
+            if (parseNDataName(ndata_name))
+            {
+                if (ndata_name.length > 0)
+                {
+                    if (spacect1 == 0)
+                        throw errors_.makeException("Space needed before NDATA");
+                    if (isPE)
+                        throw errors_.makeException("NDATA cannot be in Parameter entity");
+                    edef.ndataref_ = ndata_name;
+                    /*
+                    auto note = dtd_.notationMap.get(ndata_name,null);
+                    if (note is null)//not-wf-sa-083
+                        throw errors_.makeException(format("No notation named %s", ndata_name));
+
+                    */
+                }
+            }
+        }
+        else
+        {
+            XmlString estr;
+
+            if (spacect2 == 0)
+            {
+                throw errors_.makeException("space needed before value");
+            }
+            unquoteValue(estr);
+            if (estr.length > 0)
+            {
+                if (startsWith!("a==b")(estr,"<?xml"))
+                {
+                    throw errors_.makeException("internal entity cannot start with declaration");
+                }
+                verifyParameterEntity(estr, isPE);
+                edef.value_ = estr;
+                edef.status_ = EntityStatus.Found;
+                edef.reftype_ = RefTagType.ENTITY_REF;
+            }
+            else
+            {
+                edef.value_ = null;
+            }
+            if (edef.value_.length == 0)
+            {
+                edef.status_ = EntityStatus.Expanded;
+            }
+        }
+
+        munchSpace();
+        if (empty || front != '>')
+        {
+            throw missingEndTag();
+        }
+        markupDepth--;
+        docDeclare--;
+        popFront();
+    }
+    XmlErrorLevel parseDtdElement()
+    {
+
+        munchSpace();
+        XmlString ename;
+
+        if (!getXmlName(ename))
+            throw errors_.makeException("Expected name");
+
+        if (!munchSpace())
+        {
+            errors_.pushError(kErrorMissingSpace,XmlErrorLevel.FATAL);
+            throw errors_.makeException(badCharMsg(front));
+        }
+        ElementDef!T def = dtd_.elementDefMap.get(ename,null);
+
+        if (def is null)
+        {
+            def = new ElementDef!T(ename);
+            dtd_.elementDefMap[ename]=def;
+        }
+        else
+        {
+            if (validate_)
+                errors_.pushError(text("Element already declared: " ,ename),XmlErrorLevel.INVALID);
+        }
+        def.isInternal = dtd_.isInternal_;
+
+        // see if attributes defined for element already
+
+        AttributeList!T attList = dtd_.attributeListMap.get(ename,null);
+
+        if (attList !is null)
+            def.attrList = attList;
+
+        int listct = 0;
+        while (!empty)
+        {
+            munchSpace();
+            if (matchParen!('(')())
+            {
+                if (listct > 0)
+                    return duplicateError();
+                if (def.childList is null)
+                    def.childList = new ChildElemList!T();
+                collectElementList(def, def.childList, true);
+                errors_.checkErrorStatus();
+                listct++;
+
+                continue;
+            }
+            else if (front=='>')
+            {
+                markupDepth--;
+                docDeclare--;
+
+                popFront();
+
+                if (listct==0)
+                {
+                    throw errors_.makeException("sudden end to list");
+                }
+
+                break;
+            }
+            if (matchInput("EMPTY"))
+            {
+                // mark empty
+                if (listct > 0)
+                {
+                    return duplicateError();
+                }
+                def.hasElements = false;
+                def.hasPCData = false;
+                def.hasAny = false;
+                listct++;
+            }
+            else if (matchInput("ANY"))
+            {
+                if (listct > 0)
+                {
+                    return duplicateError();
+                }
+                def.hasElements = true;
+                def.hasPCData = true;
+                def.hasAny = true;
+                listct++;
+            }
+            else if (!empty && front == '%')
+            {
+                popFront();
+                pushEntityContext();
+            }
+            else
+            {
+                if (front == ')')
+                    throw errors_.makeException("Close parenthesis mismatch");
+                errors_.pushError(badCharMsg(front),XmlErrorLevel.FATAL);
+                popFront();
+            }
+        }
+        return XmlErrorLevel.OK;
+    }
+    int parseAttList()
+    {
+        //bool validate = true; //ctx_.validate;
+        //ParseInput src = ctx.in_;
+		XmlString keyword;
+        int spacect =  munchSpace();
+        if (front == '%')
+        {
+            if (!peCheck(0x20,!dtd_.isInternal_))
+                return false;
+            spacect = munchSpace();
+        }
+
+        if (!getXmlName(keyword))
+        {
+            throw errors_.makeException("Element name required for ATTLIST");
+        }
+        if (spacect == 0)
+            throw errors_.makeException("need space before element name");
+        munchSpace();
+        // nice to know that element exists
+        AttributeList!T def = dtd_.attributeListMap.get(keyword,null);
+
+        if (def is null)
+        {
+
+            def = new AttributeList!T(keyword);
+            //def.peRef_ = this.peReference_;
+            dtd_.attributeListMap[keyword] = def;
+        }
+
+        def.isInternal_ = dtd_.isInternal_;
+        // TODO : maybe replace with AttributeDef.isInternal
+
+
+        ElementDef!T edef = dtd_.elementDefMap.get(keyword,null);
+
+        if (edef !is null)
+        {
+            edef.attrList = def;
+        }
+        int ct = 0; // count the number of names
+        while (true)
+        {
+            // get the name of the attribute
+
+            string attType;
+
+            munchSpace();
+
+            if (!peCheck(0,!dtd_.isInternal_) && (ct == 0))
+            {
+                throw errors_.makeException("incomplete ATTLIST");
+            }
+
+            if (!empty && front=='>')
+            {
+                markupDepth--;
+                popFront();
+                break;
+            }
+
+            if (!getXmlName(keyword))
+            {
+                throw errors_.makeException("Expected attribute name");
+            }
+            ct++;
+
+            auto adef = new AttributeDef!T(keyword);
+
+            adef.isInternal = dtd_.isInternal_;
+            if (!munchSpace())
+                return false;
+
+            if (matchInput("NOTATION"))
+            {
+                adef.dataform = AttributeType.att_notation;
+                if (!munchSpace())
+                    return false;
+                if (!matchParen!('(')() || !collectAttributeEnum(adef, true))
+                {
+                    throw errors_.makeException("format of attribute notation");
+                }
+
+                int spct = munchSpace();
+
+                if (matchInput('#'))
+                {
+                    if (!getAttributeDefault(adef.require))
+                        return false;
+                    spct = munchSpace();
+                }
+
+                if (empty)
+                    break;
+                if (front == '\'' || front == '\"')
+                {
+                    if (!spct)
+                        throw errors_.makeException("space before value");
+                    if (!addDefaultValue(adef))
+                        return false;
+                }
+            }
+            // get the type of the attribute
+            else if (matchParen!'('())
+            {
+                adef.dataform = AttributeType.att_enumeration;
+                if (!collectAttributeEnum(adef, false))
+                {
+                    throw errors_.makeException("format of attribute enumeration");
+                }
+                int spaceCt = munchSpace();
+
+                if (matchInput('#'))
+                {
+                    if (!spaceCt)
+                        throw errors_.makeException("Space missing");
+
+                    if (!getAttributeDefault(adef.require))
+                        return false;
+                    if (adef.require == AttributeDefault.df_fixed)
+                    {
+                        if (! munchSpace())
+                            return false;
+                        if (!addDefaultValue(adef))
+                            return false;
+                        spaceCt =  munchSpace();
+                        /*if (!unquoteValue(dfkey))
+                        {
+						return push_error("fixed value expected");
+                        }
+                        adef.values ~= toUTF8(dfkey);
+                        adef.defaultIndex = adef.values.length - 1;*/
+                    }
+                }
+
+                if (front == '\'' || front == '\"')
+                {
+                    if (!spaceCt)
+                        throw errors_.makeException("space before value");
+                    if (!addDefaultValue(adef))
+                        return false;
+                }
+            }
+            else
+            {
+                // expecting a special name
+                if (!getUpperKeyWord(keyword))
+                {
+                    throw errors_.makeException("Expected attribute type in ATTLIST");
+                }
+
+                AttributeType*  patte = keyword in AttributeDef!T.stdAttTypeList;
+
+                if (patte is null)
+                {
+                    throw errors_.makeException(text("Unknown attribute type in ATTLIST ",bufTag_));
+                }
+                adef.dataform = *patte;
+
+                if (adef.dataform == AttributeType.att_id)
+                {
+                    // only allowed on id attribute
+                    if (def.idDef !is null)
+                    {
+                        if (validate_)
+                            errors_.pushError(text("Duplicate ID in ATTLIST: ",def.idDef.id),XmlErrorLevel.INVALID);
+                    }
+                    else
+                    {
+                        def.idDef = adef;
+                        if (validate_)
+							dtd_.elementIDMap[def.id] = adef.id;
+                    }
+                }
+                // followed by maybe a default indication or list of names
+
+
+                if (!peCheck(0x20,!dtd_.isInternal_))
+                    return false;
+
+                if (!munchSpace())
+                    return false;
+
+
+                bool enddef = false;
+
+                while (!enddef)
+                {
+                    if (empty)
+                        throw makeEmpty();
+					if (front == '>')
+                    {
+						markupDepth--;
+						popFront();
+                        throw errors_.makeException("unfinished attribute definition");
+                    }
+                    if (!peCheck(0x20,!dtd_.isInternal_))
+                        return false;
+
+                    munchSpace();
+
+                    if (empty)
+                        throw makeEmpty();
+
+                    if (front == '#')
+                    {
+                        popFront();
+                        enddef = true;
+                        if (!getAttributeDefault(adef.require))
+                            return false;
+                        if (adef.require == AttributeDefault.df_fixed)
+                        {
+                            // error if this ID
+                            if (!munchSpace())
+                            {
+                                throw errors_.makeException("space required before value");
+                            }
+
+                            unquoteValue(keyword);
+                            adef.values ~= keyword;
+                            adef.defaultIndex = cast(int) adef.values.length - 1;
+                        }
+                    }
+                    else if ((front=='\'')||(front=='\"'))
+                    {
+                        if (!addDefaultValue(adef))
+                            throw errors_.makeException("Parse value failed");
+                        enddef = true;
+                    }
+                    else
+                    {
+                        throw errors_.makeException(text("Unknown syntax in ATTLIST ",adef.id));
+                    }
+                    if (validate_ && (adef.dataform == AttributeType.att_id))
+                    {
+                        if ( (adef.require != AttributeDefault.df_required)
+							&& (adef.require != AttributeDefault.df_implied))
+                            errors_.pushError(text("Default must be #REQUIRED or #IMPLIED for ",adef.id),XmlErrorLevel.INVALID);
+                    }
+
+                }
+            }
+            auto existing = def.attributes_.get(adef.id, null);
+            if (existing is null)
+            {
+                def.attributes_[adef.id] = adef;
+                adef.attList = def;
+            }
+
+        }
+        return true;
+    }
+    private void parseDtdNotation()
+    {
+        int spacect = munchSpace();
+        XmlString notid;
+        if (!getXmlName(notid))
+        {
+            errors_.pushError("Notation must have a name",XmlErrorLevel.FATAL);
+            return;
+        }
+        bool hasIllegalColon =  (namespaceAware_ && (indexOf(notid,':') >= 0));
+
+        if (hasIllegalColon)
+            errors_.pushError(format("Notation name %s with ':' while using namespace xml",notid),XmlErrorLevel.FATAL);
+
+        if (spacect == 0)
+            throw missingSpace();
+
+        if (validate_)
+        {
+            auto pnode = notid in dtd_.notationMap;
+            if (pnode !is null)
+            {
+                //  already have error?, so ignore
+            }
+        }
+        if (hasIllegalColon) //
+            return;
+
+        spacect = munchSpace();
+        ExternalID!T extsrc;
+
+        if (getExternalUri(extsrc))
+        {
+            if (spacect == 0)
+                throw missingSpace();
+            auto xnote = new EntityData!T(notid,EntityType.Notation);
+            xnote.src_ = extsrc;
+            dtd_.notationMap[notid] = xnote;
+            if (eventMode_) {
+                results_.obj = xnote;
+                results_.eventId = SAX.XI_NOTATION;
+                eventDg_(results_);
+            }
+        }
+        else
+        {
+            errors_.pushError(format("NOTATION %s needs PUBLIC or SYSTEM id",notid),XmlErrorLevel.FATAL);
+            return;
+        }
+        munchSpace();
+        if (empty || front != '>')
+        {
+            errors_.pushError(kErrorMissingEndTag,XmlErrorLevel.FATAL);
+            return;
+        }
+        markupDepth--;
+        docDeclare--;
+        popFront();
+
+    }
+    bool pushEntityContext(bool isValue = true, char sep = 0x00, bool isallowed = true)
+    {
+        auto ed = parseParameterEntity(isValue, isallowed);
+        auto content = ed.value_;
+        if (content.length > 0)
+        {
+            if (sep)
+                pushBack(sep);
+            pushContext(content,false,ed);
+            if (sep)
+                pushBack(sep);
+        }
+        return true;
+    }
+    string getSourceContext()
+    {
+        auto backPos = streamData_.length;
+        if (backPos > 0)
+        {
+            auto frontPos = (fpos > 20) ? fpos - 20 : 0;
+            if (backPos > fpos + 20)
+                backPos = fpos + 20;
+            return format("%s [ %s ] %s", streamData_[frontPos..fpos], front, streamData_[fpos..backPos]);
+        }
+        return "";
+    }
+    void parseExternalDTD(ref ExternalID!T edtd)
+    {
+        string uri = to!string(edtd.systemId_);
+
+        if (!findSystemPath(systemPaths_, uri, uri))
+		{
+			errors_.pushError(format("Cannot find file %s",uri),XmlErrorLevel.ERROR);
+            return; // TODO: Exception?, record error
+		}
+
+		auto ep = prepChildParser();
+		auto sf = new XmlFileReader(uri);
+		ulong	pos;
+
+		scope(exit)
+		{
+		    ep.parserHalt();
+			ep.explode();
+		}
+		ep.fillSource(sf);
+        ep.frontFilterOn();
+		ep.dtd_ = dtd_;
+		ep.isStandalone_ = false;
+
+		if (xmlEncoding_.length > 0)
+		{
+			ep.setXmlEncoding(to!(const(T)[])(xmlEncoding_));
+		}
+
+		bool wasInternal = dtd_.isInternal_;
+		dtd_.isInternal_ = false;
+		scope(exit)
+		{
+			dtd_.isInternal_ = wasInternal;
+		}
+        if (eventMode_)
+        {
+            results_.eventId = SAX.DOC_TYPE;
+            results_.obj = dtd_;
+            eventDg_(results_);
+        }
+        ep.docTypeInnards(DocEndType.noDocEnd);
+        if (eventMode_) {
+            results_.eventId = SAX.DOC_END;
+            results_.obj = dtd_;
+            eventDg_(results_);
+        }
+    }
+    private void verifyGEntity()
+    {
+        //if (dtd_.GEntityMap.length > 0)
+        XmlString testGEValue;
+        StringSet!T eset;
+        foreach(ge ; dtd_.generalEntityMap)
+        {
+            int eStatus = ge.status_;
+			// not-wf-ext-sa-001
+            if (eStatus > EntityStatus.Unknown && eStatus < EntityStatus.Expanded)
+            {
+                if (!this.isStandalone_ || ge.isInternal_)
+                {
+                    int reftype = RefTagType.UNKNOWN_REF;
+                    eset.clear();
+                    if (!lookupReference(ge.name_, eset, testGEValue, reftype))
+                    {
+                        throw errors_.makeException(text("Error in entity lookup: ", ge.name_));
+                    }
+                }
+            }
+            else if (ge.ndataref_.length > 0)
+            {
+                if (ge.isInternal_)
+                {
+                    int reftype =  RefTagType.UNKNOWN_REF;
+                    eset.clear();
+                    if (eStatus > EntityStatus.Unknown && eStatus < EntityStatus.Expanded )
+                    {
+                        if (!deriveEntityContent(ge, eset, reftype))
+                            throw errors_.makeException(text("Error in entity ",ge.name_));
+                    }
+                }
+            }
+        }
+    }
+    private void ignoreDocType()
+    {
+        dchar[] dfkey;
+
+        while (!empty)
+        {
+            switch(front)
+            {
+				case '<':
+					if (isSquaredStart(2)) // because of ]] at end
+					{
+						ignoreDocType();
+					}
+					else
+						popFront();
+					break;
+				case ']':
+					if (isSquaredEnd())
+						return;
+					popFront();
+					break;
+				default:
+					popFront();
+					break;
+            }
+        }
+        //throwNotWellFormed("imbalanced []");
+    }
+    bool parseNDataName(ref XmlString opt)
+    {
+        munchSpace();
+        if (matchInput("NDATA"))
+        {
+            // reference to a notation which must be
+            // declared (? in advance)
+            int spacect = munchSpace();
+            if (!getXmlName(bufTag_))
+            {
+                throw errors_.makeException("No NDATA name");
+            }
+            if (spacect == 0)
+            {
+                throw errors_.makeException("need space before NDATA name");
+            }
+            opt = sxml!T.data(bufTag_).idup;
+            return true;
+        }
+        return false; // no such thing
+    }
+	void bombWF_Internal(XmlString val)
+	{
+		throw errors_.makeException(format("Parameter Entity in %s declared value of internal subset DTD", val));
+	}
+	void bombWF(XmlString s)
+	{
+		throw errors_.makeException(format("Invalid entity reference syntax %s",s));
+	}
+    void verifyParameterEntity(XmlString s, bool isPE)
+    {
+        /* save previous context entity values */
+
+        bool srcExternalEntity = this.inParamEntity();
+        if (srcExternalEntity)
+            srcExternalEntity = !entityContext().isInternal_;
+
+        this.pushContext(s);
+		scope(exit)
+			this.popContext();
+
+        while (!empty)
+        {
+            if (front == '%')
+            {
+                // must be part of entity definition
+                popFront();
+				XmlString ename;
+                expectEntityName(ename);
+                // can get the entity referred to?
+                if (dtd_.isInternal_)
+                {
+                    // but if we are processing a parameter entity that is external, the rule is relaxed
+                    if (!srcExternalEntity)
+                    {
+                        if (!isPE)
+                            bombWF_Internal("General entity");
+                        else
+                            bombWF_Internal("Parameter entity");
+                    }
+                }
+                else
+                {
+                    EntityData!T eref = dtd_.paramEntityMap[ename];
+                    if (eref is null)
+                    {
+                        bombWF(s);
+                    }
+                }
+            }
+            else if (front == '&')
+            {
+                popFront();
+                if (empty)
+                    bombWF(s);
+
+                if (front == '#')
+                {
+                    uint radix = void;
+                    expectedCharRef(radix);
+                }
+                else
+                {
+                    if (!getXmlName(bufTag_) || empty || front != ';')
+                        bombWF(s);
+                    popFront();
+                }
+            }
+            else
+                popFront();
+        }
+    }
+    final private bool matchParen(dchar c)()
+    {
+        if (!empty && (front == c))
+        {
+            static if (c=='(')
+            {
+				parenDepth++;
+				popFront();
+				return true;
+			}
+			else if (c==')')
+			{
+				parenDepth--;
+				popFront();
+				return true;
+			}
+		}
+		return false;
+    }
+    private XmlErrorLevel duplicateError()
+    {
+        return errors_.pushError("Duplicate definition",XmlErrorLevel.FATAL);
+    }
+    XmlErrorLevel collectElementList(ElementDef!T def, ChildElemList!T plist, bool terminator = true)
+    {
+        ChildSelect sep = ChildSelect.sl_one;
+		XmlString keyword;
+
+        int namect = 0;
+        int defct = 0;
+        bool mixedHere = false;
+        bool expectSeparator = false;
+        bool expectListItem = false; // true if after separator
+
+        bool endless = true;
+        while(endless)
+        {
+            munchSpace();
+            if (matchParen!(')')())
+            {
+                if (defct == 0)
+                {
+                    return fatalError("empty definition list");
+                }
+                if (expectListItem)
+                {
+                    return fatalError("expect item after separator");
+                }
+                getOccurenceCharacter(plist.occurs);
+                if (mixedHere)
+                {
+                    if (def.hasElements)
+                    {
+                        if (plist.occurs != ChildOccurs.oc_zeroMany)
+                        {
+                            return fatalError("mixed content can only be zero or more");
+                        }
+                    }
+                    else
+                    {
+                        if ((plist.occurs != ChildOccurs.oc_one) && (plist.occurs != ChildOccurs.oc_zeroMany) )
+                        {
+                            return fatalError("pure Parsed Character data has bad occurs modifier");
+                        }
+                    }
+                }
+                break;
+            }
+            else if (expectSeparator && matchSeparator(plist,sep))
+            {
+                expectSeparator = false;
+                expectListItem = true;
+                continue;
+            }
+            if (matchParen!('(')())
+            {
+                if (expectSeparator)
+                {
+                    return errorExpectSeparator();
+                }
+                if (def.hasPCData)
+                {
+                    return fatalError("Content particles defined in mixed content");
+                }
+                expectListItem = false;
+                auto nlist = new ChildElemList!T();
+                plist.addChildList(nlist);
+				auto errorLevel = collectElementList(def,nlist,true);
+                if ( errorLevel > XmlErrorLevel.INVALID)
+                    return errorLevel;
+                defct += plist.length;
+                expectSeparator = true;
+                continue;
+            }
+
+            if (empty)
+            {
+                if (terminator)
+                    throw makeEmpty();
+                return XmlErrorLevel.OK;
+            }
+
+            switch(front)
+            {
+				case '#':
+					popFront();
+					if (expectSeparator)
+						return errorExpectSeparator();
+
+					if (!getUpperKeyWord(keyword))
+						throw errors_.makeException("Keyword expected");
+
+					if (keyword == "PCDATA")
+					{
+						def.hasPCData = true;
+						mixedHere = true;
+						if ((namect > 0) || (plist.parent !is null))
+						{
+							return fatalError("#PCDATA needs to be first item");
+						}
+					}
+					else
+					{
+						return fatalError(format("unknown #%s",keyword));
+					}
+					defct++;
+					expectSeparator = true;
+					expectListItem = false;
+					break;
+				case '%':
+					popFront();
+					if (!pushEntityContext())
+						return XmlErrorLevel.ERROR;
+					if (dtd_.isInternal_)
+					{
+						popContext();
+						return fatalError("Parsed entity used in internal subset definition");
+					}
+					break;
+				default:
+					//expect a name
+					if (expectSeparator)
+					{
+						return errorExpectSeparator();
+					}
+
+					if (!getXmlName(keyword))
+					{
+						return fatalError("element name expected");
+					}
+					/*if (checkName == "CDATA")
+					{
+                	// test case not-wf-sa-128. Why cannot CDATA be element name?
+                	return push_error("invalid CDATA");
+					}
+					* */
+					expectListItem = false;
+
+					auto child = new ChildId!T(keyword);
+					getOccurenceCharacter(child.occurs);
+					if (def.hasPCData && (child.occurs!=ChildOccurs.oc_one))
+					{
+						return fatalError("Content particle not allowed with PCData");
+					}
+					if ((plist.firstIndexOf(keyword) >= 0) && (sep == ChildSelect.sl_choice))
+					{
+
+						if (mixedHere)
+						{
+							if (validate_)
+								errors_.pushError("Mixed content and repeated choice element",XmlErrorLevel.INVALID);
+						}
+						else
+							return errors_.pushError("Duplicate child element name in | list",XmlErrorLevel.ERROR); //E34
+					}
+					else
+						plist.append(child);
+					defct++;
+					if (namect==0)
+					{
+						def.hasElements = true;
+					}
+					namect++;
+					expectSeparator = true;
+            }
+        }
+        return XmlErrorLevel.OK;
+    }
+    private bool peCheck(char sep = 0x00, bool allowed = true)
+    {
+        if (empty)
+            return false;
+        if (front != '%')
+            return true;
+        popFront();
+        pushEntityContext(true, sep, allowed);
+        return true;
+    }
+    private bool collectAttributeEnum( AttributeDef!T adef, bool isNotation)
+    {
+        // call after getting a '('
+        bool gotName;
+
+        while (!empty)
+        {
+            munchSpace();
+            gotName = isNotation ? getXmlName(bufTag_) : getXmlNmToken(bufTag_);
+            if (!gotName)
+            {
+                throw errors_.makeException("attribute enumeration");
+            }
+            adef.values ~= sxml!T.data(bufTag_).idup;
+
+            munchSpace();
+            if (empty)
+                break;
+            if (matchParen!')'())
+            {
+                //popFront();
+                return true;
+            }
+            else if (front != '|')
+            {
+                throw errors_.makeException(" expect | in value list");
+            }
+            else
+                popFront();
+        }
+        return false;
+    }
+    private final bool getXmlNmToken(ref XmlBuffer cbuf)
+    {
+        if (empty)
+            return false;
+        if ( !(isNameCharFn(front) || isNameCharFifthEdition(front)) )
+            return false;
+        sxml!T.assign(cbuf,front);
+
+        frontFilterOff();
+        popFront();
+        while (!empty)
+        {
+            if (isNameCharFn(front) || isNameCharFifthEdition(front))
+            {
+                cbuf ~= front;
+                popFront();
+            }
+            else
+            {
+				frontFilterOn();
+                return true;
+            }
+        }
+        if (empty)
+            throw makeEmpty();
+        return false;
+    }
+    private bool getAttributeDefault(ref AttributeDefault dft)
+    {
+		XmlString keyword;
+        if (!getUpperKeyWord(keyword))
+        {
+            throw errors_.makeException( "need attribute #[default]");
+        }
+        if (keyword == "REQUIRED")
+            dft = AttributeDefault.df_required;
+        else if (keyword == "IMPLIED")
+            dft = AttributeDefault.df_implied;
+        else if (keyword == "FIXED")
+            dft = AttributeDefault.df_fixed;
+        else
+            throw errors_.makeException( text("Unknown attribute specification ",bufTag_));
+        return true;
+    }
+    private uint addDefaultValue(AttributeDef!T attDef)
+    {
+        //ParseInput src = ctx.in_;
+		XmlString aval;
+		unquoteValue(aval);
+        if (aval.length > 0)
+        {
+            if (!checkAttributeValueDef(aval))
+            {
+                throw errors_.makeException("attribute value check failed");
+            }
+            switch(attDef.dataform)
+            {
+				case AttributeType.att_id:
+					if (validate_)
+						errors_.pushError(text("ID attribute must not have a default value: ",attDef.id),XmlErrorLevel.INVALID);
+					break;
+				case AttributeType.att_nmtoken:
+					if (validate_)
+					{
+						if (!isNmToken(aval))
+							errors_.pushError(text("default value should be NMTOKEN: ",attDef.id),XmlErrorLevel.INVALID);
+					}
+					break;
+				default:
+					break;
+            }
+            if (attDef.values.length == 0)
+            {
+                attDef.values ~= aval;
+                attDef.defaultIndex = 0;
+            }
+            else
+            {
+                bool att_exists = false;
+                foreach(ix, s ; attDef.values)
+                {
+                    if (s == aval)
+                    {
+                        attDef.defaultIndex = cast(int)ix;
+                        att_exists = true;
+                        break;
+                    }
+                }
+                if (validate_ && !att_exists)
+                {
+                    errors_.pushError(("default value should be in list"),XmlErrorLevel.INVALID);
+                }
+            }
+            return true;
+        }
+        throw errors_.makeException("default attribute empty");
+        assert(0);
+    }
+    private uint checkAttributeValueDef(XmlString value)
+    {
+        // check that any entity definitions are already defined
+        // at this point in the DTD parse but do not process fully.
+		XmlString keyword;
+
+        this.pushContext(value);
+		scope(exit)
+			this.popContext();
+
+        uint NameExpected()
+        {
+            return errors_.pushError(kErrorBadEntity,XmlErrorLevel.FATAL);
+        }
+
+        while(!empty)
+        {
+            if (front == '&')
+            {
+                popFront();
+                if (empty)
+                    return NameExpected();
+                if (front == '#')
+                {
+                    // TODO: get valid character reference, or leave it?
+
+                }
+                else
+                {
+                    if (!getXmlName(keyword))
+                    {
+                        return NameExpected();
+                    }
+                    auto pc = keyword in charEntity;
+                    if (pc is null)
+                    {
+                        EntityData!T edef = dtd_.getEntity(keyword);
+                        if (edef is null)
+                        {
+                            string msg = text("Entity not defined in attribute definition ", keyword);
+							auto level = (!isStandalone_) ? XmlErrorLevel.ERROR : XmlErrorLevel.FATAL;
+                            throw errors_.makeException(msg,level);
+                        }
+                        // if notation, not a parsed entity
+                        if (edef.ndataref_.length > 0)
+                        {
+                            errors_.makeException( text("Cannot use notation entity as value: ", keyword));
+                        }
+
+                        if (edef.src_.systemId_.length > 0)
+                        {
+                            errors_.makeException( text("Cannot use external entity as value: ", keyword));
+                        }
+                    }
+                }
+            }
+            else
+                popFront();
+        }
+        return true;
+    }
+    EntityData!T parseParameterEntity(bool isValue, bool allowed = true)
+    {
+        XmlString pname;
+        expectEntityName(pname);
+        if (!allowed)
+        {
+            // get the entity name and say its not allowed here
+            throw errors_.makeException(format("parameter entity not allowed in internal subset: %s",pname));
+        }
+        StringSet!T eset;
+
+        auto ed = getParameterEntity(pname, eset, isValue);
+
+        if (ed is null)
+        {
+            throw errors_.makeException(format("Unabled to fetch entity %s",pname),XmlErrorLevel.ERROR);
+        }
+        return ed;
+    }
+	private final XmlErrorLevel fatalError(string s)
+	{
+		return errors_.pushError(s,XmlErrorLevel.FATAL);
+	}
+
+	private final XmlErrorLevel errorExpectSeparator()
+	{
+		return fatalError("Expected separator in list");
+	}
+    private final XmlErrorLevel inconsistent_separator(dchar val)
+    {
+        return errors_.pushError(format("inconsistent separator %x" ,val),XmlErrorLevel.INVALID);
+    }
+    bool getOccurenceCharacter(ref ChildOccurs occurs)
+    {
+        if (empty)
+            return false;
+        switch(front)
+        {
+			case '*':
+				occurs = ChildOccurs.oc_zeroMany;
+				break;
+			case '+':
+				occurs = ChildOccurs.oc_oneMany;
+				break;
+			case '?':
+				occurs = ChildOccurs.oc_zeroOne;
+				break;
+			default:
+				occurs = ChildOccurs.oc_one;
+				return true; // no pop
+        }
+        popFront();
+        return true;
+    }
+
+	private final uint matchSeparator(ChildElemList!T plist, ref ChildSelect sep)
+	{
+		if (empty)
+			return 0;
+
+		switch(front)
+		{
+			case '|':
+				if (sep != ChildSelect.sl_choice)
+				{
+					if (sep == ChildSelect.sl_one)
+					{
+						sep = ChildSelect.sl_choice;
+						plist.select = sep;
+					}
+					else
+						return inconsistent_separator(sep);
+				}
+				break;
+			case ',':
+				if (sep != ChildSelect.sl_sequence)
+				{
+					if (sep == ChildSelect.sl_one)
+					{
+						sep = ChildSelect.sl_sequence;
+						plist.select = sep;
+					}
+					else
+						return inconsistent_separator(sep);
+				}
+				break;
+			default:
+				// not a separator
+				return false;
+
+		}
+		popFront();
+		return true;
+	}
+}// version(DOCTYPEDEF)
 };
 

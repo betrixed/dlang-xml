@@ -11,7 +11,7 @@
 				<Option object_output="Debug/" />
 				<Option type="1" />
 				<Option compiler="dmd" />
-				<Option parameters="--input ../../../xmlconf/xmlconf.xml --summary" />
+				<Option parameters="--input ../../../xmlconf/xmlconf.xml " />
 				<Compiler>
 					<Add option="-g" />
 					<Add option="-debug" />
@@ -24,6 +24,7 @@
 				<Option type="1" />
 				<Option compiler="dmd" />
 				<Compiler>
+					<Add option="-release" />
 					<Add option="-O" />
 					<Add option="-I../../../  -I../../../examples/conform/src/" />
 				</Compiler>
@@ -32,9 +33,14 @@
 		<Unit filename="../../../README.md" />
 		<Unit filename="../../../examples/conform/src/conform.d" />
 		<Unit filename="../../../examples/conform/src/testSuite.d" />
+		<Unit filename="../../../xml/attribute.d" />
 		<Unit filename="../../../xml/dom/domt.d" />
-		<Unit filename="../../../xml/dom/dtdt.d" />
-		<Unit filename="../../../xml/textInput.d" />
+		<Unit filename="../../../xml/dtd.d" />
+		<Unit filename="../../../xml/entity.d" />
+		<Unit filename="../../../xml/error.d" />
+		<Unit filename="../../../xml/input.d" />
+		<Unit filename="../../../xml/isxml.d" />
+		<Unit filename="../../../xml/parser.d" />
 		<Unit filename="../../../xml/txml.d" />
 		<Unit filename="../../../xml/util/bomstring.d" />
 		<Unit filename="../../../xml/util/buffer.d" />
@@ -44,12 +50,8 @@
 		<Unit filename="../../../xml/util/print.d" />
 		<Unit filename="../../../xml/util/read.d" />
 		<Unit filename="../../../xml/xmlArrayDom.d" />
-		<Unit filename="../../../xml/xmlAttribute.d" />
-		<Unit filename="../../../xml/xmlChar.d" />
-		<Unit filename="../../../xml/xmlError.d" />
 		<Unit filename="../../../xml/xmlLinkDom.d" />
 		<Unit filename="../../../xml/xmlOutput.d" />
-		<Unit filename="../../../xml/xmlParser.d" />
 		<Extensions>
 			<envvars />
 			<code_completion />

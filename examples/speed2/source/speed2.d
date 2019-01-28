@@ -11,7 +11,7 @@ import std.datetime.stopwatch : benchmark, StopWatch;
 import std.file;
 import xml.util.buffer;
 
-//import xml.std.xmlSlicer;
+//import xml.xml.jcnSlicer;
 
 import std.stdio;
 import core.memory;
@@ -64,9 +64,9 @@ import std.file;
 
 void StdXmlRun( string input)
 {
-    import std.xml;
+    import xml.jcn;
     // Make a DOM tree
-    auto doc = new std.xml.Document(input);
+    auto doc = new xml.jcn.Document(input);
 }
 
 void simpleBookLoad(string s)
@@ -192,8 +192,8 @@ double testNativeBuf(uintptr_t repeats, uintptr_t bsize)
 
 void testValidate(string s)
 {
-    import std.xml;
-	std.xml.check(s);
+    import xml.jcn;
+	xml.jcn.check(s);
 }
 
 void singleTest(string inputFile, uintptr_t runs, int testid)
@@ -204,7 +204,7 @@ void singleTest(string inputFile, uintptr_t runs, int testid)
     enum uint numTests = 5;
 	double[numTests] sum;
 	double[numTests] sample;
-	string[numTests] names = ["std.xml",  "check",  "input",  "arrayDom",  "linkDom"];
+	string[numTests] names = ["xml.jcn",  "check",  "input",  "arrayDom",  "linkDom"];
 
 	//arrayDomPrint!char(s);
 
@@ -310,8 +310,8 @@ void runTests(string inputFile, uintptr_t runs)
 	sum[] = 0.0;
 
 	writeln(`
- std.xml:       Parse to simple array dom without checking
- check:         Run the verification code for std.xml
+ xml.jcn:       Parse to simple array dom without checking
+ check:         Run the verification code for xml.jcn
  input:         Load the xml document with proper filtering
  fullparser:    Use validating parser
  linkdom:       Standard bidirectional linked node DOM`);
@@ -403,7 +403,7 @@ void runTests(string inputFile, uintptr_t runs)
 
 	double control = sum[$-1];
 	writeln("averages: ", runs, " runs");
-	writefln(" %8s %8s %8s %8s %8s %8s", "std.xml",  "check",  "input",  "arrayDom",  "linkDom", "handler");
+	writefln(" %8s %8s %8s %8s %8s %8s", "xml.jcn",  "check",  "input",  "arrayDom",  "linkDom", "handler");
 	foreach(v ; sum)
         writef(" %8.4f", v);
 	writeln(" ---");
@@ -529,7 +529,7 @@ void main(string[] argv)
 
 void unit_test_1()
 {
-    import std.xml;
+    import xml.jcn;
 
 	try
 	{
@@ -577,30 +577,10 @@ void unit_test_1()
 	}
 }
 
-void unit_test_2()
-{
-    import std.xml;
-
-    string s = q"EOS
-<?xml version="1.0" encoding="utf-8"?>
-<Tests><Test thing="What &amp; Up">What &amp; Up Second</Test></Tests>
-EOS";
-
-    auto xml = new DocumentParser(s);
-
-    xml.onStartTag["Test"] = (ElementParser xml) {
-        assert(xml.tag.attr["thing"] == "What & Up");
-    };
-
-    xml.onEndTag["Test"] = (in Element e) {
-        assert(e.text() == "What & Up Second");
-    };
-    xml.parse();
-}
 
 void unit_test_3()
 {
-    import std.xml;
+    import xml.jcn;
     string s = q"EOS
 <?xml version="1.0"?>
 <set>
@@ -622,7 +602,7 @@ EOS";
 
 void unit_test_4()
 {
-    import std.xml;
+    import xml.jcn;
 
     string s = `<tag attr="&quot;value&gt;" />`;
     auto doc = new Document(s);

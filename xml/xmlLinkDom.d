@@ -2,6 +2,7 @@ module xml.xmlLinkDom;
 
 import xml.txml, xml.parser;
 import xml.attribute;
+import xml.entity;
 import xml.dom.domt;
 import xml.input, xml.isxml, xml.util.read;
 import xml.dtd, xml.error;
@@ -72,7 +73,7 @@ class DXmlDomBuild(T)
 		doc_ = d;
 		setFromDocument();
 		addSystemPath(normalizedDirName(srcPath));
-		auto sf = new XmlFileReader(File(srcPath,"r"));
+		auto sf = new XmlFileReader(srcPath);
 		parser_.fillSource = sf;
 
 		parser_.parseAll();
@@ -169,6 +170,9 @@ class DXmlDomBuild(T)
         case SAX.DOC_END:
             endDoctype(evt);
             break;
+        case SAX.XI_NOTATION:
+            notation(evt.obj);
+            break;
         default:
             break;
         }
@@ -217,8 +221,12 @@ class DXmlDomBuild(T)
 			auto eh = *peh;
 			SourceRef spos;
 			parser_.getLocation(spos);
-			return preThrowHandler(ex, eh, spos);
+			ex = preThrowHandler(ex, eh, spos);
 		}
+		// levels less than ERROR won't throw the exception
+		if (ex.level >= XmlErrorLevel.ERROR) {
+                parser_.parserHalt();
+        }
 		return ex;
 	}
 
@@ -419,7 +427,7 @@ class DXmlDomBuild(T)
                         else if (localName == "xml")
                         {
                             if (nsURI != xmlNamespaceURI)
-                                throw errors.makeException(format("xml prefix declared incorrectly ", nsURI));
+                                throw errors.makeException(format("xml prefix declared incorrectly : %s", nsURI));
                             else if (validate)
                                 errors.pushError(format("xml namespace URI %s must only have prefix xml",xmlNamespaceURI),XmlErrorLevel.INVALID);
                             goto DO_BIND;
@@ -974,16 +982,13 @@ class DXmlDomBuild(T)
     }
 	void startDoctype(Object p)
 	{
-		if (p is parser_)
-		{
-			if (dtdData_ is null)
-			{
-				parser_.setParameter(xmlAttributeNormalize,Variant(false));
-				dtdData_ = parser_.DTD(); // get DocTypeData from parser, but create a DocumentType node
-				dtdNode_ = new DocumentType(dtdData_.id_);
-				dtdNode_.setSource(dtdData_.src_.publicId_, dtdData_.src_.systemId_);
-			}
-		}
+        if (dtdData_ is null)
+        {
+            parser_.setParameter(xmlAttributeNormalize,Variant(false)); // TODO! Why? and reverse?
+            dtdData_ = parser_.DTD(); // get DocTypeData from parser, but create a DocumentType node
+            dtdNode_ = new DocumentType(dtdData_.id_);
+            dtdNode_.setSource(dtdData_.src_.publicId_, dtdData_.src_.systemId_);
+        }
 	}
 	void endDoctype(Object p)
 	{

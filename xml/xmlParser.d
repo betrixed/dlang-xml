@@ -4121,6 +4121,7 @@ class XmlParser(T)  {
         return true;
     }
 
+
     /// integrate external DTD declarations
     void parseExternalDTD(ref ExternalID edtd)
     {

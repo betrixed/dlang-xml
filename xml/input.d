@@ -26,16 +26,9 @@ import std.string;
 import std.conv;
 import std.array;
 import std.range;
+import std.file;
 import std.concurrency, std.socket;
 import xml.util.bomstring;
-
-
-version (GC_STATS)
-{
-	import xml.util.gcstats;
-}
-
-
 
 /**
     Abstract class template of ReadBuffer
@@ -67,6 +60,10 @@ public:
     {
         return false;
     }
+    // something bad happened, for urgent file close
+    void close()
+    {
+    }
 }
 
 /**
@@ -96,16 +93,6 @@ class InputCharRange(T)
     alias ReadBuffer!(T)	DataFiller;
     /// Delegate to notify when empty becomes true.
     alias void delegate() EmptyNotify;
-
-	version (GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
-
     protected
     {
 		T[]					stack_; // push back
@@ -171,16 +158,11 @@ public:
 	this()
 	{
 		empty_ = true;
-		version(GC_STATS)
-			gcStatsSum.inc();
 	}
 
-	~this()
-	{
-		version(GC_STATS)
-			gcStatsSum.dec();
+	void close() {
+        df_.close();
 	}
-
     /// notifyEmpty read property
     @property EmptyNotify notifyEmpty()
     {
@@ -559,15 +541,6 @@ public:
 
 class FileReader(T) :  ReadBuffer!(T)
 {
-	version (GC_STATS)
-	{
-		mixin GC_statistics;
-		static this()
-		{
-			setStatsId(typeid(typeof(this)).toString());
-		}
-	}
-
 
     File  s_; //
     ubyte[] data_; // raw buffer
@@ -577,6 +550,8 @@ class FileReader(T) :  ReadBuffer!(T)
 
     override bool fillData(ref const(T)[] fillme, ref ulong refPos)
     {
+        if (eof_)
+            return false;
         if (data_ is null)
         {
             data_ = new ubyte[INTERNAL_BUF];
@@ -588,6 +563,9 @@ class FileReader(T) :  ReadBuffer!(T)
         {
             fillme = (cast(T*) data_.ptr)[0..didRead.length / T.sizeof];
             return true;
+        }
+        else {
+            close();
         }
         return false;
     }
@@ -601,14 +579,19 @@ class FileReader(T) :  ReadBuffer!(T)
         super();
         s_ = ins;
         eof_ = false;
-		version(GC_STATS)
-			gcStatsSum.inc();
     }
 
 	~this()
 	{
-		version(GC_STATS)
-			gcStatsSum.dec();
+
+	}
+
+	override void close() {
+
+         if (!eof_) {
+            eof_ = true;
+            s_.close();
+         }
 	}
 }
 
@@ -665,10 +648,10 @@ class XmlFileReader :  ReadBuffer!(dchar)
         selector_ = 0; // input character size
     }
 
-public:
-    this(File s)
+
+    this(string filepath)
     {
-        rawStream = s;
+        rawStream = File(filepath,"r");
         init();
     }
 
@@ -681,12 +664,15 @@ public:
 
     override bool fillData(ref const(dchar)[] buffer, ref ulong posRef)
     {
+        if (eof_)
+            return false;
+
         if (!checkedBom_)
         {
             checkedBom_ = true;
             if (!initStream())
 			{
-				eof_ = true;
+				close();
                 return false;
 			}
             // use the decode to fill the buffer
@@ -710,8 +696,7 @@ public:
         default:
             break;
         }
-		if (eof_)
-			rawStream.close();
+
 		if (buffer_.length > 0)
 		{
 			buffer = buffer_;
@@ -810,6 +795,8 @@ private:
         bom_ = readBOM(rawStream, preload, eofFlag_);
         if (eofFlag_ && (preload.length == 0))
         {
+            eof_ = true;
+            rawStream.close();
             return false;
         }
 
@@ -906,7 +893,7 @@ private:
             {
                 if (cir_.empty && (i > 0))
 				{
-                    eof_ = true;
+                     close();
 				}
                 break;
             }
@@ -926,7 +913,7 @@ private:
             {
                 if (wir_.empty && (i > 0))
 				{
-                    eof_ = true;
+                     close();
 				}
                 break;
             }
@@ -944,7 +931,7 @@ private:
             {
                 if (dir_.empty && (i > 0))
 				{
-					eof_ = true;
+					close();
 				}
 				break;
             }
@@ -952,7 +939,27 @@ private:
         }
         return i;
     }
+// something bad happened, for urgent file close
 
+    public override void close()
+    {
+        if (!eof_) {
+            eof_ = true;
+            rawStream.close();
+            switch(selector_) {
+                case 1: cir_.close();
+                    break;
+                case 2: wir_.close();
+                    break;
+                case 4: dir_.close();
+                    break;
+                default:
+                    break;
+            }
+
+
+        }
+    }
 }
 
 /// This needs to be on a thread (see std.concurrency receive documentation)
@@ -998,6 +1005,7 @@ class AsyncFill : ReadBuffer!(dchar)
 				if (!getMore())
 				{
 					eof_ = true;
+
 					return false;
 				}
 			}

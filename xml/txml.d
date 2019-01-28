@@ -150,7 +150,6 @@ template sxml(T) {
 				xbuf ~= w.data;
 	            xbuf ~= ';';
 	        }
-
 		}
 	}
 	else {

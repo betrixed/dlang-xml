@@ -24,6 +24,8 @@
 				<Option type="1" />
 				<Option compiler="dmd" />
 				<Compiler>
+					<Add option="-release" />
+					<Add option="-inline" />
 					<Add option="-O" />
 					<Add option="-I../../../" />
 				</Compiler>
@@ -37,6 +39,7 @@
 		<Unit filename="../../../xml/error.d" />
 		<Unit filename="../../../xml/input.d" />
 		<Unit filename="../../../xml/isxml.d" />
+		<Unit filename="../../../xml/jcn.d" />
 		<Unit filename="../../../xml/parser.d" />
 		<Unit filename="../../../xml/txml.d" />
 		<Unit filename="../../../xml/util/bomstring.d" />

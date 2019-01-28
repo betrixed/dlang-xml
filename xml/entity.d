@@ -1,4 +1,4 @@
-module entity;
+module xml.entity;
 
 import std.conv;
 
@@ -11,20 +11,18 @@ struct ExternalID(T)
     immutable(T)[] systemId_;
 }
 
+enum EntityStatus {
+    Unknown, Found, Expanded, Failed
+};
+
 class EntityData(T)
 {
-    enum
-    {
-        Unknown, Found, Expanded, Failed
-    }
-
-
     immutable(T)[] 		name_;				// key for AA lookup
     immutable(T)[] 		value_;				// processed value
     ExternalID!T		src_;				// public and system id
     EntityType		etype_;				// Parameter, General or Notation?
     RefTagType		reftype_;			// SYSTEM or what?
-    int				status_;			// unknown, found, expanded or failed
+    EntityStatus    status_;			// unknown, found, expanded or failed
     bool			isInternal_;	    // This was defined in the internal subset of DTD
 
     immutable(T)[] 			encoding_;		// original encoding?
@@ -35,7 +33,6 @@ class EntityData(T)
     string			baseDir_;		// filesystem path to folder
     EntityData		context_;		// if the entity was declared in another entity
 
-
     ~this()
     {
 
@@ -44,7 +41,7 @@ class EntityData(T)
     {
         name_ = id;
         etype_ = et;
-        status_ = EntityData.Unknown;
+        status_ = EntityStatus.Unknown;
     }
 
     @property void value(const(T)[] s)

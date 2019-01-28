@@ -128,67 +128,6 @@ class XmlErrors
     }
 }
 
-/// Common messages that have a string lookup.
-enum XmlErrorCode
-{
-	NO_CODE,
-    UNEXPECTED_END,
-    TAG_FORMAT,
-    MISSING_QUOTE,
-    EXPECTED_ATTRIBUTE,
-    BAD_CHARACTER,
-    MISSING_SPACE,
-    DUPLICATE_ATTRIBUTE,
-    ELEMENT_NESTING,
-    CDATA_COMMENT,
-    BAD_ENTITY_REFERENCE,
-    MISSING_END_BRACKET,
-    EXPECTED_NAME,
-    CONTEXT_STACK,
-	EXPECT_INCLUDE,
-	CIRCULAR_ENTITY_REFERENCE,
-};
-
-
-string getXmlErrorMsg(int code)
-{
-    switch(code)
-    {
-		case XmlErrorCode.UNEXPECTED_END:
-			return "Unexpected end to parse source";
-		case XmlErrorCode.TAG_FORMAT:
-			return "Tag format error";
-		case XmlErrorCode.MISSING_QUOTE:
-			return "Missing quote";
-		case XmlErrorCode.EXPECTED_ATTRIBUTE:
-			return "Attribute value expected";
-		case XmlErrorCode.BAD_CHARACTER:
-			return "Bad character value";
-		case XmlErrorCode.MISSING_SPACE:
-			return "Missing space character";
-		case XmlErrorCode.DUPLICATE_ATTRIBUTE:
-			return "Duplicate attribute";
-		case XmlErrorCode.ELEMENT_NESTING:
-			return "Element nesting error";
-		case XmlErrorCode.CDATA_COMMENT:
-			return "Expected CDATA or Comment";
-		case XmlErrorCode.BAD_ENTITY_REFERENCE:
-			return "Expected entity reference";
-		case XmlErrorCode.MISSING_END_BRACKET:
-			return "Missing end >";
-		case XmlErrorCode.EXPECTED_NAME:
-			return "Expected name";
-		case XmlErrorCode.CONTEXT_STACK:
-			return "Pop on empty context stack";
-		case XmlErrorCode.EXPECT_INCLUDE:
-			return "INCLUDE or IGNORE expected";
-		case XmlErrorCode.CIRCULAR_ENTITY_REFERENCE:
-			return "Circular entity reference";
-		default:
-			break;
-    }
-    return format("Unknown error code: %s ",code);
-}
 /// Used to communicate error details
 class DOMError  :  Object
 {

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="html" />
+		<Option pch_mode="2" />
+		<Option compiler="dmd" />
+		<Build>
+			<Target title="Debug">
+				<Option output="../../../bin/htmld" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="dmd" />
+				<Option parameters="--input  examples/html/military_gdp_2015_forecast.html" />
+				<Compiler>
+					<Add option="-g" />
+					<Add option="-debug" />
+				</Compiler>
+			</Target>
+			<Target title="Release">
+				<Option output="../../../bin/htmlr" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../../" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="dmd" />
+				<Compiler>
+					<Add option="-O2" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-I../../../" />
+		</Compiler>
+		<Unit filename="../../../examples/html/main.d" />
+		<Unit filename="../../../examples/html/military_gdp_2015_forecast.html" />
+		<Unit filename="../../../xml/attribute.d" />
+		<Unit filename="../../../xml/entity.d" />
+		<Unit filename="../../../xml/error.d" />
+		<Unit filename="../../../xml/input.d" />
+		<Unit filename="../../../xml/isxml.d" />
+		<Unit filename="../../../xml/parser.d" />
+		<Unit filename="../../../xml/sax.d" />
+		<Unit filename="../../../xml/util/bomstring.d" />
+		<Unit filename="../../../xml/util/buffer.d" />
+		<Unit filename="../../../xml/util/inputEncode.d" />
+		<Unit filename="../../../xml/util/read.d" />
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<lib_finder disable_auto="1" />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

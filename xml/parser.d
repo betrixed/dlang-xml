@@ -170,6 +170,8 @@ class XmlParser(T) {
 
 		BBCount				bbct;
 
+        StringSet!T         voidtags_;
+
 		ParseStateDg	    stateDg_;
         PState				state_;
 
@@ -842,6 +844,15 @@ class XmlParser(T) {
 
                     if (empty)
                         throw makeEmpty();
+                    if (isHTML_) {
+                        // if a voidtag, equivalent of empty-tag
+                        if (voidtags_.contains(tag_)) {
+                            elementDepth--; // cancel earlier increment
+                            setResults(SAX.TAG_EMPTY);
+                            itemCount++;
+                            return;
+                        }
+                    }
                     /* Check for immediate following end tag, which means TAG_EMPTY */
                     if (front == '<')
                     {
@@ -854,6 +865,8 @@ class XmlParser(T) {
                         popFront();
                         if (empty)
                             throw makeEmpty();
+
+
                         if (front == '/')
                         {
                             // by strict rules of XML, must be the end tag of preceding start tag.
@@ -1530,6 +1543,10 @@ class XmlParser(T) {
         }
         throw missingQuote();
     }
+    XmlError noSingleAmp()
+    {
+        return errors_.makeException("single '&' not allowed");
+    }
 
     void attributeNormalize(ref immutable(T)[] src)
     {
@@ -1539,10 +1556,7 @@ class XmlParser(T) {
             throw errors_.makeException("< not allowed in attribute value");
         }
 
-        void noSingleAmp()
-        {
-			throw errors_.makeException("single '&' not allowed");
-        }
+
 
 		intptr_t   epos = -1;
 	ENTITY_SCAN:
@@ -1589,7 +1603,7 @@ class XmlParser(T) {
 			case '&':
                 popFront();
                 if (empty)
-                    noSingleAmp();
+                    throw noSingleAmp();
                 if (front == '#')
                 {
                     uint radix;
@@ -1598,8 +1612,15 @@ class XmlParser(T) {
                     continue;
                 }
 				XmlString entityName;
-                if (!getXmlName(entityName) || !matchInput(';'))
-                    noSingleAmp();
+                if (!getXmlName(entityName) || !matchInput(';')) {
+                    if (!isHTML_) {
+                        throw noSingleAmp();
+                    }
+                    else {
+                        bufNormAttr_ ~= '&';
+                        continue;
+                    }
+                }
                 auto pc = entityName in charEntity;
                 if (pc is null)
                 {
@@ -2142,6 +2163,11 @@ class XmlParser(T) {
         else
             throw errors_.makeException(format("Bad standalone value: %s",standalone));
     }
+
+    void fileSource(string path) {
+        auto source = new XmlFileReader(path);
+        fillSource(source);
+    }
 	final void initSource(immutable(T)[] src)
 	{
 		streamData_ = to!(immutable(dchar)[])(src);
@@ -2243,6 +2269,15 @@ class XmlParser(T) {
 	void isHtml(bool val) @property
 	{
 		isHTML_ = val;
+		if (val && voidtags_.empty() ) {
+            //HTML4 : area, base, br, col, hr, img, input, link, meta, param.
+            //HTML5 : command, keygen, source
+            auto tags = ["area", "base", "br", "col", "hr", "img",
+                        "input", "link", "meta", "param",
+                        "command", "keygen", "source"];
+            voidtags_.init(tags);
+            charEntity["nbsp"] = "&nbsp;";  // maps to itself??
+		}
 	}
     intptr_t tagDepth() const
     {
@@ -3012,8 +3047,15 @@ class XmlParser(T) {
 
 				case '&':
 					popFront();
-					if (empty)
-						throw errors_.makeException("single '&' not allowed");
+					if (empty) {
+                        if (!isHTML_) {
+                            throw noSingleAmp();
+                        }
+                        else {
+                            app ~= '&';
+                            continue NEXT_CHAR;
+                        }
+					}
 					result = true;
 					if (front == '#')
 					{
@@ -3025,7 +3067,7 @@ class XmlParser(T) {
 					XmlString entityName;
 
 					if (!getXmlName(entityName) || !matchInput(';'))
-						throw errors_.makeException("single '&' not allowed");
+						throw noSingleAmp();
 
 					auto pc = entityName in charEntity;
 					if (pc !is null)

@@ -245,12 +245,18 @@ public:
 	{
 		nsStack_.put(namespace);
 		namespace = tns;
+		if (namespace !is null) {
+            current_.handlers_ = namespace[current_.tagName];
+		}
 	}
 	void popNamespace()
 	{
 		if (nsStack_.length > 0)
 		{
 			namespace = nsStack_.movePopBack();
+            if (namespace !is null) {
+                current_.handlers_ = namespace[current_.tagName];
+            }
 		}
 	}
 
@@ -268,7 +274,6 @@ public:
 
 	bool saxEvent(XmlEvent!T tag)
 	{
-
         return true;
 	}
 	void isHtml(bool val)
@@ -285,6 +290,10 @@ public:
 		parser_.setParameter(xmlAttributeNormalize,Variant(false));
 		parser_.setParameter(xmlCharFilter,Variant(false));
 		parser_.initSource(xml);
+	}
+
+	void setupFile(string filePath) {
+        parser_.fileSource(filePath);
 	}
 	void setupNoSlice(S)(immutable(S)[] xml)
 	{

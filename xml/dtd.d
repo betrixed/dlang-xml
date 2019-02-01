@@ -213,6 +213,11 @@ struct StringSet(T)
 {
     bool[ immutable(T)[] ]	map;
 
+    void init(string[] values) {
+        foreach(s ; values) {
+            put(to!(immutable(T)[])(s));
+        }
+    }
     bool contains(const(T)[] name)
     {
         return (name in map) != null;
@@ -224,6 +229,10 @@ struct StringSet(T)
             return false;
         map[name.idup] = true;
         return true;
+    }
+
+    bool empty() {
+        return map.length == 0;
     }
     void remove(const(T)[] name)
     {

@@ -16,11 +16,12 @@ Inputs flexible
 	-- slices (arrays of characters).
 	
 
-Parser can call an event delegate with class XmlEvent(T)  (All classes templates tested with char and wchar)
+Parser can call an event delegate with class XmlEvent(T)  (All class templates tested with char and wchar)
 Or can call method parseOne(), in a loop and access the internal XmlEvent(T) class for parsed data.
 
-Examples of building a DOM -  full implementation with DTD, validation and entity processing.
-Simple DOM using D class and array.
+Examples of building a DOM 
+	- full implementation DOM with Node interfaces, DTD, validation and entity processing.
+	- Simple DOM using D class and array, similar to std.xml
 
 SAX event processing with selective delegates for element names and event types.
 

@@ -1,136 +1,43 @@
 DLang-XML
 =========
 
-This project started out as investigating the D language via writing an XML parser. This included a D1 version, which has been abandoned.
-
-This repository is a revision undertaken to bring this up to date on D version 2.067
-
-The goal is a fully conforming parser, that passes nearly all the standard conformance tests.
-
-There is also a standalone, separate revised version of the std.xml standalone module, renamed as xml.std.xmlSlicer.
-On 32-bit runtime addresses some of its GC issues. There was also abuse of exceptions in validation check.
-The xmlSlicer is mainly used as performance comparison.
-
-Progress
---------
-With a refactor, the module names do not match up to earlier versions. Conformance for validation and error detection of xml documents is complete.
-
-Parser
-------
-The parser and dom are a template of one of the 3 D language character sizes, char, wchar or dchar. Each of these instances can read any kind of xml encoded document file with any kind of BOM mark at the beginning, if this is a valid document and encoding combination. Most often the usage might be of two sorts.  There is either a document to be parsed from the file system, or from a string obtained by some means. If it is already a string there is a possibility of not allocating as much memory if document or information extracted is to be of the same encoding and character size. The D language leads its self open to the possibility of slicing the existing buffer, and returning segments of the origin document as immutable arrays. There are surely some trade-offs. The module xmlLinkDom provides 4 templated functions to parse the document.
-```
-import std.variant;
-import xml.xmlLinkDom;
-
-// First pick the character type for the DOM document.
-auto mydoc = new XMLDOM!(char).Document;
-// .. set any expectations of document
-DOMConfiguration config = doc.getDomConfig();
-/* .. if namespaces, the DOM is built from ElementNS and AttrNS, 
-      and not plain Element and Attribute types
- .. this means there are memory and performance savings if namespace processing is not required. 
- .. namespaces are false by default 
-*/
- 
-config.setParameter("namespace-declarations",Variant(true));
-
-// Pick a source with corresponding character type.
-
-try {
-    if (filesystem)
-    {
-      // file may be of any encoding, endian and character type
-      parseXmlFile!(char)( mydoc, filePath, true); 
-    }
-    else {
-      // Must specify character type of myArray (CT), 
-      // which can be different to that of document
-      parseXml!(char, CT) ( mydoc, myArray, true);
-      
-/* alternative to mostly slice up original array if same document character type ..
-      auto mydoc = new XMLDOM!(wchar).Document;
-      parseXmlSlice(wchar)( mydoc, myArray, true);
-*/
-
-    }
-}
-catch(XmlError xe)
-{
-  // .. check for errors
-}
-
-// .. do stuff with the document
-```
-
-### Console applications
-Conformance The conformance test suite versions, all XML documents, are found on http://www.w3.org/XML/Test/
-The latest test suite is http://www.w3.org/XML/Test/xmlts20130923.tar.gz .
-Unpack the latest into the root directory, which should create a directory named xmlconf and use path to xmlconf.xml file as input.
-for instance me$ ./conformance64d --input ../../xmlconf/xmlconf.xml
-
-Conformance - Runs all the XML parser conformance tests. There are currently 2,585 of them. Most of them are beyond the capability of the original std.xml, which cannot process DOCTYPE or validate against it.
-
-Speed - Comparison of the xml.std.xmlSlicer and xml.xmlParser execution times averaged on a simple test file.
-
-BigLoad - Comparison test of GC non-collection issues by object instance counting, for a big XML document. With some creative destruction, everything gets a full cleanup.
+Validating XML Parser.  Tested against XML Conformance Test Suite.
 
 
-SAX Interface
-_____________
-For selective extraction of XML information on the fly.
-```
-/// worn example
-    Book[]  books;
-	Book	book;
+Also able to parse HTML.
+
+
+==Release Version 1.0 
+
+Parser has two modes of collecting the parse information. 
+
+Inputs flexible 
+	-- files (of various byte-orders, 8 / 16 bit character types.
+	-- slices (arrays of characters).
 	
-	auto mainNamespace = new TagSpace(); 
-	auto bookNamespace = new TagSpace();
-	auto visitor = new SaxParser();	
-	visitor.namespace = mainNamespace;
 
-	scope(exit)
-	{
-		destroy(visitor);
-		destroy(mainNamespace);
-		destroy(bookNamespace);
-	}
+Parser can call an event delegate with class XmlEvent(T)  (All classes templates tested with char and wchar)
+Or can call method parseOne(), in a loop and access the internal XmlEvent(T) class for parsed data.
 
-	mainNamespace["book",SAX.TAG_START] = (const SaxEvent xml) {
-		book.id = xml.attributes.get("id");
-		visitor.namespace = bookNamespace;
-	};
+Examples of building a DOM -  full implementation with DTD, validation and entity processing.
+Simple DOM using D class and array.
 
-	mainNamespace["book",SAX.TAG_END]  = (const SaxEvent xml) {
-		books ~= book;
-		visitor.namespace = mainNamespace;
-	};
+SAX event processing with selective delegates for element names and event types.
 
-	/// single delegate assignment for tag
-	bookNamespace["author", SAX.TEXT] = (const SaxEvent xml) {
-		book.author = xml.data;
-	};
-	bookNamespace["title", SAX.TEXT] = (const SaxEvent xml) {
-		book.title = xml.data;
-	};
-	bookNamespace["genre", SAX.TEXT] = (const SaxEvent xml) {
-		book.genre = xml.data;
-	};
-	bookNamespace["price",SAX.TEXT] = (const SaxEvent xml)
-	{
-		book.price = xml.data;
-	};
-	bookNamespace["publish_date",SAX.TEXT] = (const SaxEvent xml)
-	{
-		book.pubDate = xml.data;
-	};
-	bookNamespace["description",SAX.TEXT] = (const SaxEvent xml)
-	{
-		book.description = xml.data;
-	};
+Release 1.0 of this is ready for use.  
 
-	visitor.setupNormalize(s);
-	visitor.parseDocument();
-	
-```
+The documentation isn't, but see examples.
+
+html -  	parse a HTML document, using isHTML setup and SAX events.
+extract 	more SAX extraction.
+conformance	Run the entire 2500+ suite of test examples, throw errors where appropriate.
+speed		Timed for xml data extraction against the std.xml
+
+
+Sax - style interface & simple dom.
+
+Challenges overcome to bring about this version 
+	- time and persistance.
+	- tracking every File object opened to make sure it gets closed, no matter what exception thrown, in order not to run out of system file handles.
 
 

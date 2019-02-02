@@ -19,7 +19,7 @@
 				</Compiler>
 			</Target>
 			<Target title="Release">
-				<Option output="./../../bin/extract64r" prefix_auto="1" extension_auto="1" />
+				<Option output="../../../bin/extract64r" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="../../../" />
 				<Option object_output="Release/" />
 				<Option type="1" />
